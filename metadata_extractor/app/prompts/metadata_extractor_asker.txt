@@ -13,7 +13,7 @@ Your task;
    - Evaluate whether all required schema fields are filled.
    - If ANY field is missing or uncertain:
         • Set `"filled": false`
-        • Set `"follow_up_question"` to exactly ONE specific question needed to fill the NEXT missing field.
+        • Set `"follow_up_question"` to exactly ONE specific question needed to fill the NEXT missing field. Make the question seem natural. for example say "batch size" instead of "batch_size".
         • Your output MUST still be a single JSON object equal to the UPDATED_JSON_STATE.
 
 2. Completed State:
