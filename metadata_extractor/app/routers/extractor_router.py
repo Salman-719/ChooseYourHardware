@@ -1,6 +1,7 @@
 from fastapi import APIRouter
-from app.schemas import ExtractionRequest, ExtractionResponse
-from app.services.extractor import run_metadata_extractor
+
+from metadata_extractor.app.schemas import ExtractionRequest, ExtractionResponse
+from metadata_extractor.app.services.extractor import run_metadata_extractor
 
 router = APIRouter(
     prefix="/extractor",

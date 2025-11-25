@@ -1,10 +1,14 @@
 import json
 from openai import OpenAI
 
-from app.schemas import ExtractionRequest
-from app.config import (
-    OPENAI_API_KEY, ASKER_PROMPT, UPDATER_PROMPT,
-    MODEL_FIELDS, LAYER_TYPES, OPENAI_LLM_MODEL
+from metadata_extractor.app.schemas import ExtractionRequest
+from metadata_extractor.app.config import (
+    OPENAI_API_KEY,
+    ASKER_PROMPT,
+    UPDATER_PROMPT,
+    MODEL_FIELDS,
+    LAYER_TYPES,
+    OPENAI_LLM_MODEL,
 )
 
 client = OpenAI(api_key=OPENAI_API_KEY)
