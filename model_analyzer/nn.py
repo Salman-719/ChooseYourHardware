@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Sequence, Tuple
 
 from .utils import (
-    PRECISION_TO_BITS,
     ValidationError,
     dtype_bits_from_string,
     require_bool,
@@ -40,9 +39,11 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
 
     param_count = 0
     activation_elements = 0
+    activation_peak = 0
     flops_total = 0
 
     current_shape = [batch_size] + input_shape  # channels-first layout implied by sample.
+    layer_details: List[Dict[str, Any]] = []
 
     for idx, layer in enumerate(layer_summary):
         if not isinstance(layer, dict):
@@ -56,9 +57,10 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
             raise ValidationError(f"layer_summary[{idx}].params must be a non-negative integer.")
         out_shape = _normalize_output_shape(layer.get("output_shape"), batch_size, idx)
 
-        # Compute per-layer activation memory from provided output shape.
         elems_out = shape_elements(out_shape, allow_none_leading=True)
+        # Compute per-layer activation memory from provided output shape.
         activation_elements += elems_out
+        activation_peak = max(activation_peak, elems_out)
 
         if layer_type in {"conv2d", "conv1d", "conv3d"}:
             flops, inferred_params = _conv_flops_and_params(layer, layer_type, current_shape, out_shape)
@@ -80,6 +82,22 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
 
         param_count += params
         flops_total += flops
+
+        layer_details.append(
+            {
+                "name": layer.get("name", f"layer_{idx}"),
+                "type": layer_type_raw,
+                "input_shape": current_shape,
+                "output_shape": out_shape,
+                "params": params,
+                "param_bytes": params * dtype_bytes,
+                "flops": flops,
+                "activation_elements": elems_out,
+                "activation_bytes": elems_out * dtype_bytes,
+                "flops_per_byte": flops / (params * dtype_bytes + elems_out * dtype_bytes)
+                if (params or elems_out) else 0.0,
+            }
+        )
         current_shape = out_shape
 
     if total_params_declared is not None and total_params_declared != param_count:
@@ -87,14 +105,30 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
             f"Declared total_params {total_params_declared} does not match summed params {param_count}."
         )
 
+    activation_peak_bytes = activation_peak * dtype_bytes
+    activation_sum_bytes = activation_elements * dtype_bytes
+
     return {
         "model_type": model_level.get("model_type", "neural_network"),
         "dtype_bits": dtype_bits,
         "param_count": param_count,
         "param_memory_bytes": param_count * dtype_bytes,
-        "activation_memory_bytes": activation_elements * dtype_bytes,
+        "activation_peak_bytes": activation_peak_bytes,
+        "activation_sum_bytes": activation_sum_bytes,
+        # For compatibility, keep activation_memory_bytes aligned to peak.
+        "activation_memory_bytes": activation_peak_bytes,
         "flops_per_inference": flops_total,
-        "extra": {},
+        "extra": {
+            "activation_elements_sum": activation_elements,
+            "activation_peak_elements": activation_peak,
+            "activation_peak_bytes": activation_peak_bytes,
+            "layers": layer_details,
+        },
+        "inference_scenario": {
+            "batch_size": batch_size,
+            "sequence_length": None,
+            "precision_bits": dtype_bits,
+        },
     }
 
 
