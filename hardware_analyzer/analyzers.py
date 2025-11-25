@@ -1,4 +1,8 @@
-"""Per-kind hardware analyzers."""
+"""Per-kind hardware analyzers.
+
+All FLOP/OP rates are in raw operations per second (not Tera units).
+All *_bytes fields are raw bytes; all *_bytes_per_s fields are raw bytes/second.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,8 @@ from .utils import (
     tflops_to_flops,
     tops_to_ops,
 )
+
+DTYPE_MAP = {"fp32": 32, "fp16": 16, "bf16": 16, "int8": 8}
 
 
 def _gpu_peak_from_sms(spec: Dict[str, Any]) -> float:
@@ -74,12 +80,15 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
 
     return {
         "dtype_support": {"fp32": True, "fp16": supports_fp16, "bf16": supports_bf16, "int8": supports_int8},
+        "dtype_map": DTYPE_MAP,
+        "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
         "memory_capacity_bytes": {"ram": ram_capacity_bytes, "vram": None},
         "memory_bandwidth_bytes_per_s": {"ram": ram_bandwidth_bytes, "vram": None},
+        "memory_model": "cpu_only",
         "host_device_bandwidth_bytes_per_s": None,
         "cpu_threads": total_threads,
         "num_gpus": None,
@@ -124,12 +133,15 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
 
     return {
         "dtype_support": {"fp32": True, "fp16": supports_fp16, "bf16": supports_bf16, "int8": supports_int8},
+        "dtype_map": DTYPE_MAP,
+        "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
         "memory_capacity_bytes": {"ram": None, "vram": vram_capacity_bytes},
         "memory_bandwidth_bytes_per_s": {"ram": None, "vram": vram_bandwidth_bytes},
+        "memory_model": "separate",
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
@@ -169,12 +181,15 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
 
     return {
         "dtype_support": dtype_support,
+        "dtype_map": DTYPE_MAP,
+        "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
         "memory_capacity_bytes": {"ram": None, "vram": mem_capacity_bytes},
         "memory_bandwidth_bytes_per_s": {"ram": None, "vram": mem_bandwidth_bytes},
+        "memory_model": "separate",
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
@@ -227,6 +242,8 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
     # Shared memory pool; represent as both ram and vram.
     return {
         "dtype_support": dtype_support,
+        "dtype_map": DTYPE_MAP,
+        "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
@@ -236,6 +253,7 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
             "ram": cpu_norm["memory_bandwidth_bytes_per_s"]["ram"],
             "vram": gpu_norm["memory_bandwidth_bytes_per_s"]["vram"],
         },
+        "memory_model": "shared",
         "host_device_bandwidth_bytes_per_s": gpu_norm["host_device_bandwidth_bytes_per_s"],
         "cpu_threads": cpu_norm["cpu_threads"],
         "num_gpus": 1,
@@ -290,17 +308,25 @@ def analyze_multi_gpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dic
     aggregate = {
         "peak_flops_per_s_by_dtype": peak_flops,
         "sustained_flops_per_s_by_dtype": sustained_flops,
-        "memory_capacity_bytes": {"ram": ram_bytes, "vram": vram_total},
+        "ops_per_s_int8": {"peak": peak_ops.get("int8"), "sustained": sustained_ops.get("int8")},
+        "memory_capacity_bytes": {"ram_total": ram_bytes, "vram_total": vram_total},
+        "memory_bandwidth_bytes_per_s": {"vram_sum": vram_bw or None},
+        "num_nodes": 1,
+        "num_gpus_total": num_gpus,
     }
 
     return {
         "dtype_support": dtype_support,
+        "dtype_map": DTYPE_MAP,
+        "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
         "memory_capacity_bytes": {"ram": ram_bytes, "vram": vram_total},
         "memory_bandwidth_bytes_per_s": {"ram": cpu_norm["memory_bandwidth_bytes_per_s"]["ram"], "vram": vram_bw or None},
+        "memory_model": "separate",
+        # Host-device bandwidth: using first available GPU link or interconnect bandwidth if provided.
         "host_device_bandwidth_bytes_per_s": host_bw if host_bw is not None else interconnect_bw,
         "cpu_threads": cpu_norm["cpu_threads"],
         "num_gpus": num_gpus,
@@ -320,6 +346,9 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
     dtype_support = {"fp32": False, "fp16": False, "bf16": False, "int8": False}
     total_gpus = 0
     cpu_threads = 0
+
+    node_count = len(spec["nodes"])
+    vram_bw_sum = 0.0
 
     for node in spec["nodes"]:
         if not isinstance(node, dict):
@@ -348,6 +377,9 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
             total_gpus += norm["num_gpus"]
         if norm["cpu_threads"]:
             cpu_threads += norm["cpu_threads"]
+        vbw = norm["memory_bandwidth_bytes_per_s"]["vram"]
+        if vbw:
+            vram_bw_sum += vbw
 
     network_bw = None
     network_latency = None
@@ -368,18 +400,26 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
     aggregate = {
         "peak_flops_per_s_by_dtype": total_peak_flops,
         "sustained_flops_per_s_by_dtype": total_sustained_flops,
-        "memory_capacity_bytes": {"ram": total_ram, "vram": total_vram},
+        "ops_per_s_int8": {"peak": total_peak_ops.get("int8"), "sustained": apply_util(total_peak_ops.get("int8"), utils["int8"])},
+        "memory_capacity_bytes": {"ram_total": total_ram, "vram_total": total_vram},
+        "memory_bandwidth_bytes_per_s": {"vram_sum": vram_bw_sum or None},
+        "num_nodes": node_count,
+        "num_gpus_total": total_gpus if total_gpus > 0 else None,
     }
 
     return {
         "dtype_support": dtype_support,
+        "dtype_map": DTYPE_MAP,
+        "utilization_assumptions": utils,
         "peak_flops_per_s": total_peak_flops,
         "peak_ops_per_s": total_peak_ops,
         "sustained_flops_per_s": total_sustained_flops,
         "sustained_ops_per_s": {"int8": apply_util(total_peak_ops["int8"], utils["int8"])},
         "memory_capacity_bytes": {"ram": total_ram, "vram": total_vram},
         "memory_bandwidth_bytes_per_s": {"ram": None, "vram": None},
-        "host_device_bandwidth_bytes_per_s": network_bw,
+        "memory_model": "separate" if total_vram > 0 else "cpu_only",
+        # Cluster: host_device bandwidth not used; network captures node-to-node link.
+        "host_device_bandwidth_bytes_per_s": None,
         "cpu_threads": cpu_threads if cpu_threads > 0 else None,
         "num_gpus": total_gpus if total_gpus > 0 else None,
         "aggregate": aggregate,
