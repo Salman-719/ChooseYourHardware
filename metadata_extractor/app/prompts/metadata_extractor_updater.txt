@@ -26,7 +26,7 @@ STRICT RULES:
 
 The allowed layer types and the attributes to be filled for each are:
 {}
-
+You are supposed to fill all of these attributes for every layer. No more, no less.
 An example of the JSON schema you must fill is:
 {}
 DO NOT copy this. Just copy the fields and fill them thrugh user input. Unfilled fields are to be filled with `null`.

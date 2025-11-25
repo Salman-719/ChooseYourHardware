@@ -35,3 +35,4 @@ The CURRENT_JSON_STATE is:
 {}
 
 Now update `filled` and `follow_up_question` accordingly and output the entire state including them.
+If you want to ask about a specific layer, provide enough contextso the user knows which layer you are asking about.

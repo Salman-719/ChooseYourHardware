@@ -1,37 +1,58 @@
 {
   "cnn": {
-    "usage_constraints": {
-      "batch_size": 4,
-      "latency_mode": "per_inference",
-      "target_latency_s": 0.1,
-      "use_case": "batch_offline"
-    },
-
-    "model_level": {
-      "input_shape": [3, 224, 224], 
-      "precision": "fp32",
-      "total_params": 11796954,
-      "trainable_params": 11796954,
-      "non_trainable_params": 0,
-      "framework": "pytorch",
-      "model_type": "cnn"
-    },
-
-    "layer_summary": [
-      {
-        "name": "conv1",
-        "type": "Conv2d",
-        "output_shape": [null, 64, 112, 112],
-        "params": 9408
-      },
-      {
-        "name": "bn1",
-        "type": "BatchNorm2d",
-        "output_shape": [null, 64, 112, 112],
-        "params": 128
-      }
-    ]
+  "usage_constraints": {
+    "batch_size": 4,
+    "latency_mode": "per_inference",
+    "target_latency_s": 0.1,
+    "use_case": "batch_offline"
   },
+
+  "model_level": {
+    "input_shape": [3, 224, 224],
+    "precision": "fp32",
+    "total_params": 11796954,
+    "trainable_params": 11796954,
+    "non_trainable_params": 0,
+    "framework": "pytorch",
+    "model_type": "cnn"
+  },
+
+  "layer_summary": [
+    {
+      "name": "conv1",
+      "type": "Conv2d",
+      "output_shape": [null, 64, 112, 112],
+      "params": 9408,
+
+      "__fields__": {
+        "in_channels": 3,
+        "out_channels": 64,
+        "kernel_size": [7, 7],
+        "stride": [2, 2],
+        "padding": [3, 3],
+        "dilation": [1, 1],
+        "groups": 1,
+        "bias": true,
+        "padding_mode": "zeros"
+      }
+    },
+
+    {
+      "name": "bn1",
+      "type": "BatchNorm2d",
+      "output_shape": [null, 64, 112, 112],
+      "params": 128,
+
+      "__fields__": {
+        "num_features": 64,
+        "eps": 1e-05,
+        "momentum": 0.1,
+        "affine": true,
+        "track_running_stats": true
+      }
+    }
+  ]
+},
 
 
   "unet": [
