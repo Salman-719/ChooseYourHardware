@@ -65,21 +65,22 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
 
         if layer_type in {"conv2d", "conv1d", "conv3d"}:
             flops, inferred_params = _conv_flops_and_params(layer, layer_type, current_shape, out_shape)
+            _ensure_param_match(layer, params, inferred_params, idx)
         elif layer_type in {"dense", "fullyconnected", "linear"}:
             flops, inferred_params = _dense_flops_and_params(layer, current_shape, out_shape)
+            _ensure_param_match(layer, params, inferred_params, idx)
         elif layer_type in {"batchnormalization", "batchnorm", "batchnorm2d", "batchnorm1d", "batchnorm3d"}:
             flops, inferred_params = _batchnorm_flops_and_params(layer, current_shape, out_shape)
+            _ensure_param_match(layer, params, inferred_params, idx)
         elif layer_type in {"activation", "relu", "gelu", "sigmoid", "tanh", "softmax", "elu", "selu", "swish"}:
             flops, inferred_params = _activation_flops_and_params(current_shape, out_shape)
+            _ensure_param_match(layer, params, inferred_params, idx)
         elif layer_type == "flatten":
             flops, inferred_params = 0, 0
+            _ensure_param_match(layer, params, inferred_params, idx)
         else:
-            raise ValidationError(f"Unsupported layer type '{layer_type_raw}' at index {idx}.")
-
-        if inferred_params != params:
-            raise ValidationError(
-                f"Layer {layer.get('name', idx)} param mismatch: declared {params}, inferred {inferred_params}."
-            )
+            # Fallback: accept unknown layers without param inference; use declared params and activation shape for memory.
+            flops, inferred_params = 0, params
 
         param_count += params
         flops_total += flops
@@ -159,6 +160,13 @@ def _normalize_output_shape(shape_val: Any, batch_size: int, idx: int) -> List[i
     if shape and shape[0] is None:
         shape[0] = batch_size
     return shape
+
+
+def _ensure_param_match(layer: Dict[str, Any], declared: int, inferred: int, idx: int) -> None:
+    if inferred != declared:
+        raise ValidationError(
+            f"Layer {layer.get('name', idx)} param mismatch: declared {declared}, inferred {inferred}."
+        )
 
 
 def _conv_flops_and_params(

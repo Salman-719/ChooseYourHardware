@@ -127,13 +127,21 @@
       "target_latency_s": 0.25
     },
     "model_level": {
+      "input_shape": [512, 768],
       "sequence_length": 512,
       "precision": "fp32",
       "total_params": 110000000,
       "model_type": "transformer_encoder",
       "hidden_dim": 768,
       "num_heads": 12,
-      "num_layers": 12
+      "num_layers": 12,
+      "ffn_size": 3072,
+      "max_sequence_length": 512,
+      "use_bias": true,
+      "use_layernorm": true,
+      "vocab_size": 30522,
+      "include_embeddings": true,
+      "include_positional_embeddings": true
     },
     "layer_summary": [
       {
@@ -160,10 +168,17 @@
       "precision": "bf16",
       "total_params": 7000000000,
       "model_type": "llm",
-      "hidden_dim": 4096,
+      "hidden_size": 4096,
       "num_heads": 32,
       "num_layers": 32,
-      "vocab_size": 32000
+      "ffn_size": 11008,
+      "vocab_size": 32000,
+      "max_sequence_length": 2048,
+      "use_bias": true,
+      "use_layernorm": true,
+      "include_embeddings": true,
+      "include_positional_embeddings": true,
+      "include_kv_cache": true
     },
     "layer_summary": [
       {
@@ -187,6 +202,7 @@
     },
     "model_level": {
       "input_dim": 784,
+      "input_shape": [784],
       "precision": "fp32",
       "total_params": 535818,
       "model_type": "mlp",
@@ -221,6 +237,7 @@
     },
     "model_level": {
       "input_dim": 128,
+      "input_shape": [128],
       "precision": "fp32",
       "total_params": 1200000,
       "model_type": "rnn",
@@ -250,6 +267,7 @@
     },
     "model_level": {
       "latent_dim": 128,
+      "input_shape": [128],
       "precision": "fp16",
       "total_params": 40000000,
       "model_type": "gan",
@@ -277,6 +295,7 @@
       "target_latency_s": 0.4
     },
     "model_level": {
+      "input_shape": [3, 256, 256],
       "precision": "fp16",
       "total_params": 800000000,
       "model_type": "diffusion",
