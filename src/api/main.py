@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import get_settings
 from utils.logging import get_logger, setup_logging
-from .v1.endpoints import hardware, models
+from .v1.endpoints import hardware, metadata, models
 
 logger = get_logger(__name__)
 
@@ -57,6 +57,7 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(models.router, prefix="/api/v1", tags=["models"])
     app.include_router(hardware.router, prefix="/api/v1", tags=["hardware"])
+    app.include_router(metadata.router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

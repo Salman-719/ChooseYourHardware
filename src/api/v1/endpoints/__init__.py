@@ -1,3 +1,5 @@
 """API v1 endpoints package."""
 
-__all__ = []
+from . import hardware, metadata, models
+
+__all__ = ["hardware", "metadata", "models"]
