@@ -16,7 +16,14 @@ from .utils import (
 
 def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
     """Analyze a neural network described via usage/model_level/layer_summary."""
-    usage = require_dict(nn_root.get("usage_constraints"), "usage_constraints")
+    usage = nn_root.get("usage_constraints")
+    inf_cfg = nn_root.get("inference_config")
+    if usage is None and inf_cfg is None:
+        raise ValidationError("usage_constraints or inference_config is required.")
+    if usage is None:
+        usage = require_dict(inf_cfg, "inference_config")
+    else:
+        usage = require_dict(usage, "usage_constraints")
     batch_size = require_int(usage, "batch_size", positive=True)
 
     model_level = require_dict(nn_root.get("model_level"), "model_level")
@@ -107,6 +114,9 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
 
     activation_peak_bytes = activation_peak * dtype_bytes
     activation_sum_bytes = activation_elements * dtype_bytes
+    total_layer_flops = sum(layer["flops"] for layer in layer_details)
+    total_layer_bytes = sum(layer["param_bytes"] + layer["activation_bytes"] for layer in layer_details)
+    avg_flops_per_byte = total_layer_flops / total_layer_bytes if total_layer_bytes > 0 else 0.0
 
     return {
         "model_type": model_level.get("model_type", "neural_network"),
@@ -122,8 +132,9 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
             "activation_elements_sum": activation_elements,
             "activation_peak_elements": activation_peak,
             "activation_peak_bytes": activation_peak_bytes,
-            "layers": layer_details,
         },
+        "layers": layer_details,
+        "intensity": {"avg_flops_per_byte": avg_flops_per_byte},
         "inference_scenario": {
             "batch_size": batch_size,
             "sequence_length": None,

@@ -15,6 +15,7 @@ Your task;
         • Set `"filled": false`
         • Set `"follow_up_question"` to exactly ONE specific question needed to fill the NEXT missing field. Make the question seem natural. for example say "batch size" instead of "batch_size".
         • Your output MUST still be a single JSON object equal to the UPDATED_JSON_STATE.
+        • Prioritize required fields: model_type, inference_config.batch_size (and sequence_length for transformers/LLMs), and llm_metadata for llm_decoder (num_layers, hidden_size, ffn_size, num_heads, max_context_tokens, vocab_size, uses_kv_cache).
 
 2. Completed State:
    - If ALL required fields are filled:

@@ -9,9 +9,14 @@ from .utils import ValidationError, require_bool, require_dict, require_int
 
 
 def analyze_llm_decoder(
-    config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, batch_size: int, seq_length: int
+    config: Dict[str, Any],
+    dtype_bits: int,
+    dtype_bytes: int,
+    batch_size: int,
+    seq_length: int,
+    llm_metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
-    llm_cfg = require_dict(config.get("llm_config"), "llm_config")
+    llm_cfg = require_dict(config.get("llm_config"), "llm_config") if config.get("llm_config") else llm_metadata
     num_layers = require_int(llm_cfg, "num_layers", positive=True)
     hidden_size = require_int(llm_cfg, "hidden_size", positive=True)
     ffn_size = require_int(llm_cfg, "ffn_size", positive=True)
@@ -19,12 +24,19 @@ def analyze_llm_decoder(
     if hidden_size % num_heads != 0:
         raise ValidationError("hidden_size must be divisible by num_heads.")
     vocab_size = require_int(llm_cfg, "vocab_size", positive=True)
-    max_seq_len = require_int(llm_cfg, "max_sequence_length", positive=True)
-    use_bias = require_bool(llm_cfg, "use_bias")
-    use_layernorm = require_bool(llm_cfg, "use_layernorm")
-    include_embeddings = require_bool(llm_cfg, "include_embeddings")
-    include_pos_embeddings = require_bool(llm_cfg, "include_positional_embeddings")
-    include_kv_cache = require_bool(llm_cfg, "include_kv_cache")
+    max_seq_len = require_int(llm_cfg, "max_context_tokens", positive=True)
+    use_bias = require_bool(llm_cfg, "use_bias") if "use_bias" in llm_cfg else False
+    use_layernorm = require_bool(llm_cfg, "use_layernorm") if "use_layernorm" in llm_cfg else True
+    include_embeddings = require_bool(llm_cfg, "include_embeddings") if "include_embeddings" in llm_cfg else True
+    include_pos_embeddings = require_bool(llm_cfg, "include_positional_embeddings") if "include_positional_embeddings" in llm_cfg else True
+    kv_flag = llm_cfg.get("uses_kv_cache") if "uses_kv_cache" in llm_cfg else llm_cfg.get("include_kv_cache")
+    if kv_flag is None:
+        raise ValidationError("llm_decoder must specify uses_kv_cache/include_kv_cache.")
+    if not isinstance(kv_flag, bool):
+        raise ValidationError("uses_kv_cache/include_kv_cache must be boolean.")
+    include_kv_cache = kv_flag
+    if seq_length > max_seq_len:
+        raise ValidationError("sequence_length must be <= max_context_tokens for llm_decoder.")
 
     d_head = hidden_size // num_heads
     param_count = 0
@@ -139,6 +151,9 @@ def analyze_llm_decoder(
 
     activation_sum_bytes = activation_elements * dtype_bytes
     activation_peak_bytes = activation_peak_elements * dtype_bytes
+    total_layer_flops = sum(layer["flops"] for layer in layer_details)
+    total_layer_bytes = sum(layer["param_bytes"] + layer["activation_bytes"] for layer in layer_details)
+    avg_flops_per_byte = total_layer_flops / total_layer_bytes if total_layer_bytes > 0 else 0.0
 
     return {
         "model_type": "llm_decoder",
@@ -155,8 +170,9 @@ def analyze_llm_decoder(
             "activation_elements_sum": activation_elements,
             "activation_peak_elements": activation_peak_elements,
             "activation_peak_bytes": activation_peak_bytes,
-            "layers": layer_details,
         },
+        "layers": layer_details,
+        "intensity": {"avg_flops_per_byte": avg_flops_per_byte},
         "inference_scenario": {
             "batch_size": batch_size,
             "sequence_length": seq_length,

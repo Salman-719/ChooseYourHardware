@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from . import knn, kmeans, llm, nn, transformers, trees
-from .utils import ValidationError, dtype_bits_from_string, load_json, require_dict, require_int
+from .utils import ValidationError, dtype_bits_from_string, load_json, require_bool, require_dict, require_int
 
 
 def analyze_model(model_json: str) -> str:
@@ -23,8 +23,10 @@ def _dispatch(raw: Dict[str, Any]) -> Dict[str, Any]:
     if "model_type" in raw:
         return _dispatch_standard(raw)
 
-    # Metadata-extractor style: top-level usage/model/layers (plus filled/follow_up_question).
-    if {"usage_constraints", "model_level", "layer_summary"}.issubset(raw.keys()):
+    # Metadata-extractor style: top-level usage/model/layers (plus filled/follow_up_question), or
+    # inference_config/model_level/layer_summary.
+    if ({"usage_constraints", "model_level", "layer_summary"}.issubset(raw.keys())
+            or ({"inference_config", "model_level", "layer_summary"}.issubset(raw.keys()))):
         return nn.analyze_neural_summary(raw)
 
     # Neural network summary style input: expect a single key like "cnn" or "neural_network".
@@ -62,7 +64,10 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     inference_cfg = require_dict(raw.get("inference_config"), "inference_config")
     batch_size = require_int(inference_cfg, "batch_size", positive=True)
     seq_length = inference_cfg.get("sequence_length")
-    if seq_length is not None:
+    if model_type in {"transformer", "llm_decoder"}:
+        if seq_length is None or not isinstance(seq_length, int) or seq_length <= 0:
+            raise ValidationError("sequence_length must be a positive integer for transformer/llm_decoder.")
+    elif seq_length is not None:
         if not isinstance(seq_length, int) or seq_length <= 0:
             raise ValidationError("sequence_length must be a positive integer when provided.")
 
@@ -84,7 +89,34 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     elif model_type == "llm_decoder":
         if seq_length is None:
             raise ValidationError("sequence_length is required for llm_decoder models.")
-        result = llm.analyze_llm_decoder(raw, dtype_bits, dtype_bytes, batch_size, seq_length)
+        llm_meta = require_dict(raw.get("llm_metadata"), "llm_metadata")
+        num_layers = require_int(llm_meta, "num_layers", positive=True)
+        hidden_size = require_int(llm_meta, "hidden_size", positive=True)
+        ffn_size = require_int(llm_meta, "ffn_size", positive=True)
+        num_heads = require_int(llm_meta, "num_heads", positive=True)
+        if hidden_size % num_heads != 0:
+            raise ValidationError("hidden_size must be divisible by num_heads.")
+        max_ctx = require_int(llm_meta, "max_context_tokens", positive=True)
+        if seq_length > max_ctx:
+            raise ValidationError("sequence_length must be <= max_context_tokens.")
+        vocab_size = require_int(llm_meta, "vocab_size", positive=True)
+        uses_kv_cache = require_bool(llm_meta, "uses_kv_cache")
+        result = llm.analyze_llm_decoder(
+            raw,
+            dtype_bits,
+            dtype_bytes,
+            batch_size,
+            seq_length,
+            llm_metadata={
+                "num_layers": num_layers,
+                "hidden_size": hidden_size,
+                "ffn_size": ffn_size,
+                "num_heads": num_heads,
+                "max_context_tokens": max_ctx,
+                "vocab_size": vocab_size,
+                "uses_kv_cache": uses_kv_cache,
+            },
+        )
     else:
         raise ValidationError(f"Unhandled model_type '{model_type}'.")
 
@@ -101,6 +133,14 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
         result.setdefault("activation_peak_bytes", act_bytes)
         # Prefer peak as the canonical activation_memory_bytes.
         result["activation_memory_bytes"] = result["activation_peak_bytes"]
+
+    expected_scenario = {
+        "batch_size": batch_size,
+        "sequence_length": seq_length if seq_length is not None else None,
+        "precision_bits": dtype_bits,
+    }
+    if result.get("inference_scenario") != expected_scenario:
+        raise ValidationError("Model inference_scenario must match inference_config (batch_size, sequence_length, precision_bits).")
     return result
 
 

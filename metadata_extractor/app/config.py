@@ -32,4 +32,4 @@ with open(MODEL_FIELDS_PATH) as f:
     MODEL_FIELDS = json.loads(f.read())
 
 with open(LAYER_TYPES_PATH) as f:
-    LAYER_TYPES = {"cnn": json.loads(f.read())}
+    LAYER_TYPES = json.loads(f.read())

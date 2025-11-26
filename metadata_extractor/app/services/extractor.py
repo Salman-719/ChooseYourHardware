@@ -14,7 +14,7 @@ async def run_metadata_extractor(extraction_request: ExtractionRequest):
     model_fields['filled'] = False
     model_fields['follow_up_question'] = "null"
 
-    allowed_layers = LAYER_TYPES[extraction_request.model_type]
+    allowed_layers = LAYER_TYPES.get(extraction_request.model_type) or LAYER_TYPES.get("all_layers", [])
 
     # filled = False
     last_msg = extraction_request.user_input or "null"

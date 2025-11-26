@@ -19,6 +19,25 @@ from .utils import (
 )
 
 DTYPE_MAP = {"fp32": 32, "fp16": 16, "bf16": 16, "int8": 8}
+COMPLEXITY_BY_KIND = {
+    "cpu_node": 1,
+    "gpu": 1,
+    "tpu": 1,
+    "accelerator": 1,
+    "jetson": 1,
+    "soc": 1,
+    "multi_gpu_node": 2,
+    "cluster": 3,
+}
+
+
+def _extract_metadata(spec: Dict[str, Any], kind: str) -> Dict[str, Any]:
+    return {
+        "cost_usd_per_hour": spec.get("cost_usd_per_hour"),
+        "region": spec.get("region"),
+        "provider": spec.get("provider"),
+        "complexity_score": COMPLEXITY_BY_KIND.get(kind),
+    }
 
 
 def _gpu_peak_from_sms(spec: Dict[str, Any]) -> float:
@@ -92,6 +111,7 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
         "host_device_bandwidth_bytes_per_s": None,
         "cpu_threads": total_threads,
         "num_gpus": None,
+        **_extract_metadata(spec, "cpu_node"),
     }
 
 
@@ -145,6 +165,7 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
+        **_extract_metadata(spec, "gpu"),
     }
 
 
@@ -193,6 +214,7 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
+        **_extract_metadata(spec, "accelerator"),
     }
 
 
@@ -257,6 +279,7 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
         "host_device_bandwidth_bytes_per_s": gpu_norm["host_device_bandwidth_bytes_per_s"],
         "cpu_threads": cpu_norm["cpu_threads"],
         "num_gpus": 1,
+        **_extract_metadata(spec, "jetson"),
     }
 
 
@@ -331,6 +354,7 @@ def analyze_multi_gpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dic
         "cpu_threads": cpu_norm["cpu_threads"],
         "num_gpus": num_gpus,
         "aggregate": aggregate,
+        **_extract_metadata(spec, "multi_gpu_node"),
     }
 
 
@@ -349,6 +373,7 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
 
     node_count = len(spec["nodes"])
     vram_bw_sum = 0.0
+    ram_bw_sum = 0.0
 
     for node in spec["nodes"]:
         if not isinstance(node, dict):
@@ -380,6 +405,9 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
         vbw = norm["memory_bandwidth_bytes_per_s"]["vram"]
         if vbw:
             vram_bw_sum += vbw
+        rbw = norm["memory_bandwidth_bytes_per_s"]["ram"]
+        if rbw:
+            ram_bw_sum += rbw
 
     network_bw = None
     network_latency = None
@@ -416,7 +444,7 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
         "sustained_flops_per_s": total_sustained_flops,
         "sustained_ops_per_s": {"int8": apply_util(total_peak_ops["int8"], utils["int8"])},
         "memory_capacity_bytes": {"ram": total_ram, "vram": total_vram},
-        "memory_bandwidth_bytes_per_s": {"ram": None, "vram": None},
+        "memory_bandwidth_bytes_per_s": {"ram": ram_bw_sum or None, "vram": vram_bw_sum or None},
         "memory_model": "separate" if total_vram > 0 else "cpu_only",
         # Cluster: host_device bandwidth not used; network captures node-to-node link.
         "host_device_bandwidth_bytes_per_s": None,
@@ -424,4 +452,5 @@ def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, 
         "num_gpus": total_gpus if total_gpus > 0 else None,
         "aggregate": aggregate,
         "network": {"bandwidth_bytes_per_s": network_bw, "latency_usec": network_latency},
+        **_extract_metadata(spec, "cluster"),
     }

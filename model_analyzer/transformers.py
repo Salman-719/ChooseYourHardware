@@ -117,6 +117,9 @@ def analyze_transformer(
 
     activation_sum_bytes = activation_elements * dtype_bytes
     activation_peak_bytes = activation_peak_elements * dtype_bytes
+    total_layer_flops = sum(layer["flops"] for layer in layer_details)
+    total_layer_bytes = sum(layer["param_bytes"] + layer["activation_bytes"] for layer in layer_details)
+    avg_flops_per_byte = total_layer_flops / total_layer_bytes if total_layer_bytes > 0 else 0.0
 
     return {
         "model_type": "transformer",
@@ -131,8 +134,9 @@ def analyze_transformer(
             "activation_elements_sum": activation_elements,
             "activation_peak_elements": activation_peak_elements,
             "activation_peak_bytes": activation_peak_bytes,
-            "layers": layer_details,
         },
+        "layers": layer_details,
+        "intensity": {"avg_flops_per_byte": avg_flops_per_byte},
         "inference_scenario": {
             "batch_size": batch_size,
             "sequence_length": seq_length,

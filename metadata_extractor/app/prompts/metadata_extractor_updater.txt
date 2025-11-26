@@ -14,6 +14,10 @@ Your tasks:
    - ONLY fill a field if the value is explicitly known or can be deduced safely from the new information.  
    - NEVER delete or overwrite a previously filled field unless the new information is clearly more accurate.
    - NEVER guess unknown values.
+   - Ensure required top-level fields are present:
+     • model_type (e.g., cnn, transformer, llm_decoder).
+     • inference_config with batch_size (always) and sequence_length for transformer/llm_decoder.
+     • For llm_decoder, fill llm_metadata: num_layers, hidden_size, ffn_size, num_heads, max_context_tokens, vocab_size, uses_kv_cache.
 
 2. Validation:
    - If a layer is described but not in the allowed-layer list, map it to the closest allowed layer.

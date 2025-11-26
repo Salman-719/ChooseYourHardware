@@ -1,34 +1,36 @@
 # Matcher
 
-Lightweight matcher that takes a model cost report (output of `model_analyzer`) and a hardware normalization report (output of `hardware_analyzer`), then ranks hardware candidates.
+Bandwidth-aware matcher that consumes:
+- `model`: full output of `model_analyzer.analyze_model`
+- `hardware_analysis`: list/object from `hardware_analyzer.analyze_hardware_spec`
+- `requirements`: worst-case scenario and constraints
 
-## Usage
-
-```python
-from model_analyzer import analyze_model
-from hardware_analyzer import core as hw_core
-from matcher import match_model_to_hardware
-
-model_report = json.loads(analyze_model(model_json_str))
-hardware_report = hw_core.analyze_hardware_spec(hardware_spec_dict)
-
-matches = match_model_to_hardware(
-    model_report,
-    hardware_report,
-    allow_multi_gpu_shard=False,  # set True to allow VRAM sharding across GPUs in a node
-    allow_cross_node=False,       # set True to allow clusters as distributed targets
-)
+## Input schema
+```json
+{
+  "model": { ... },                 // analyzer output
+  "hardware_analysis": [ ... ],     // analyzer output list
+  "requirements": {
+    "worst_case": {
+      "batch_size": 1,
+      "sequence_length": 128,
+      "qps": 5.0,
+      "latency_seconds": 0.1
+    },
+    "constraints": {
+      "max_hourly_cost_usd": 5.0,
+      "allowed_regions": ["us-east-1"],
+      "disallow_kinds": ["cluster"]
+    }
+  }
+}
 ```
 
-`matches["candidates"]` is sorted by feasibility and estimated latency (lower first) using sustained throughput.
-
-## Policies implemented
-
-- Dtype mapping with fallback: 32→fp32; 16→fp16→bf16→fp32; 8→int8→fp16→bf16→fp32.
-- Memory checks use the correct pool by hardware kind:
-  - `cpu_node`: compare against RAM.
-  - `gpu`/`accelerator`/`tpu`: prefer VRAM; if it only fits in RAM, mark as offload.
-  - `jetson`/`soc`: shared RAM/VRAM pool.
-  - `multi_gpu_node`: if sharding allowed, compare to total VRAM; otherwise estimate per-GPU VRAM.
-  - `cluster`: only if cross-node parallel is allowed.
-- Latency/QPS estimates always use sustained (not peak) throughput.
+## Behavior
+- Validates that `model.inference_scenario` matches `requirements.worst_case` (batch_size and sequence_length when applicable).
+- Dtype mapping: 32→fp32; 16→fp16→bf16→fp32; 8→int8→fp16→fp32.
+- Effective throughput = min(sustained compute, bandwidth * model intensity), using VRAM BW for separate memory models, otherwise RAM BW.
+- Memory fit: uses VRAM for separate, RAM for cpu_only/shared.
+- SLA: passes only if memory fits and both latency and QPS bounds (based on effective throughput) meet worst_case.
+- Constraints: filters by cost, region, and disallowed kinds.
+- Output candidates include latency/QPS bounds, cost, region, and complexity_score, sorted by latency.
