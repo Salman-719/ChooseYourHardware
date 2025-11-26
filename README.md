@@ -183,10 +183,24 @@ OPENAI_LLM_MODEL=gpt-4o-mini
 LOG_LEVEL=INFO
 ```
 
-## License
+## Documentation
 
-[Add your license here]
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development guidelines and contribution workflow
+- **API Documentation** - Available at `/docs` when running the API server
 
 ## Contributing
 
-[Add contribution guidelines here]
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+- Development setup
+- Code standards and style
+- Testing requirements
+- Pull request process
+
+## License
+
+MIT License (or specify your license)
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
