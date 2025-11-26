@@ -26,6 +26,7 @@ def analyze_kmeans(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, ba
     if distance_metric not in {"euclidean", "manhattan"}:
         raise ValidationError("distance_metric must be 'euclidean' or 'manhattan'.")
     include_sqrt = require_bool(km_cfg, "include_sqrt")
+    num_iterations = require_int(km_cfg, "num_iterations", positive=True)
 
     if distance_metric == "euclidean":
         flops_per_distance = 3 * num_features + (1 if include_sqrt else 0)
@@ -46,10 +47,11 @@ def analyze_kmeans(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, ba
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops_iteration,
-        "total_flops": flops_iteration,
+        "total_flops": flops_iteration * num_iterations,
         "total_stream_bytes": (num_points * num_features * dtype_bytes) + (param_count * dtype_bytes),
         "total_jumps": 0,
         "extra": {
             "flops_per_iteration": flops_iteration,
+            "num_iterations": num_iterations,
         },
     }

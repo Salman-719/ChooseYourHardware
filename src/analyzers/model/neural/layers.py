@@ -78,9 +78,53 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
         elif layer_type == "flatten":
             flops, inferred_params = 0, 0
             _ensure_param_match(layer, params, inferred_params, idx)
+        elif layer_type in {
+            "conv1dtranspose",
+            "conv2dtranspose",
+            "conv3dtranspose",
+            "deconv1d",
+            "deconv2d",
+            "deconv3d",
+        }:
+            flops, inferred_params = _conv_flops_and_params(layer, layer_type, current_shape, out_shape)
+            _ensure_param_match(layer, params, inferred_params, idx)
+        elif layer_type in {"depthwiseconv1d", "depthwiseconv2d"}:
+            flops, inferred_params = _depthwise_conv_flops_and_params(layer, layer_type, current_shape, out_shape)
+            _ensure_param_match(layer, params, inferred_params, idx)
+        elif layer_type in {
+            "maxpooling1d",
+            "maxpooling2d",
+            "maxpooling3d",
+            "maxpool1d",
+            "maxpool2d",
+            "maxpool3d",
+            "averagepooling1d",
+            "averagepooling2d",
+            "averagepooling3d",
+            "avgpool1d",
+            "avgpool2d",
+            "avgpool3d",
+            "globalaveragepooling1d",
+            "globalaveragepooling2d",
+            "globalaveragepooling3d",
+            "globalmaxpooling1d",
+            "globalmaxpooling2d",
+            "globalmaxpooling3d",
+        }:
+            flops, inferred_params = _pooling_flops_and_params(layer, current_shape, out_shape, layer_type)
+            _ensure_param_match(layer, params, inferred_params, idx)
+        elif layer_type in {"add", "subtract", "multiply", "average", "maximum", "minimum", "concatenate"}:
+            flops = shape_elements(out_shape, allow_none_leading=True)
+            inferred_params = 0
+            _ensure_param_match(layer, params, inferred_params, idx)
         else:
-            # Fallback: accept unknown layers without param inference; use declared params and activation shape for memory.
-            flops, inferred_params = 0, params
+            # Unknown layers must provide explicit FLOPs to avoid silent underestimation.
+            explicit_flops = layer.get("flops")
+            if not isinstance(explicit_flops, (int, float)) or explicit_flops < 0:
+                raise ValidationError(
+                    f"layer_summary[{idx}] has unknown type '{layer_type_raw}' and must include non-negative 'flops'."
+                )
+            flops, inferred_params = int(explicit_flops), params
 
         param_count += params
         flops_total += flops
@@ -119,6 +163,7 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
         "activation_sum_bytes": activation_sum_bytes,
         # For compatibility, keep activation_memory_bytes aligned to peak.
         "activation_memory_bytes": activation_peak_bytes,
+        "activation_memory_is_exact": True,
         "flops_per_inference": flops_total,
         "total_flops": flops_total,
         "total_stream_bytes": (param_count * dtype_bytes) + activation_sum_bytes,
@@ -133,6 +178,7 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
             "batch_size": batch_size,
             "sequence_length": None,
             "precision_bits": dtype_bits,
+            "scenario_kind": "single_pass",
         },
     }
 
@@ -273,6 +319,52 @@ def _activation_flops_and_params(in_shape: Sequence[int | None], out_shape: Sequ
         raise ValidationError("Activation input/output rank mismatch.")
     elems_out = shape_elements(out_shape, allow_none_leading=True)
     return elems_out, 0
+
+
+def _depthwise_conv_flops_and_params(
+    layer: Dict[str, Any], layer_type: str, in_shape: Sequence[int | None], out_shape: Sequence[int | None]
+) -> Tuple[int, int]:
+    # Treat as grouped conv with groups == input channels.
+    if len(in_shape) != len(out_shape):
+        raise ValidationError("Depthwise conv input/output rank mismatch.")
+    c_in = _require_channel(in_shape, "input")
+    layer = dict(layer)
+    layer["groups"] = c_in
+    return _conv_flops_and_params(layer, layer_type, in_shape, out_shape)
+
+
+def _pooling_flops_and_params(
+    layer: Dict[str, Any], in_shape: Sequence[int | None], out_shape: Sequence[int | None], layer_type: str
+) -> Tuple[int, int]:
+    if len(in_shape) != len(out_shape):
+        raise ValidationError("Pooling input/output rank mismatch.")
+    if len(out_shape) < 2:
+        raise ValidationError("Pooling shapes must include channel dimension.")
+    c_in = _require_channel(in_shape, "input")
+    c_out = _require_channel(out_shape, "output")
+    if c_in != c_out:
+        raise ValidationError("Pooling is expected to preserve channel count.")
+    spatial_in = in_shape[2:] if len(in_shape) > 2 else in_shape[1:]
+    spatial_out = out_shape[2:] if len(out_shape) > 2 else out_shape[1:]
+    if any(dim is None for dim in spatial_in) or any(dim is None for dim in spatial_out):
+        raise ValidationError("Pooling spatial dims must be concrete.")
+    in_prod = 1
+    out_prod = 1
+    for dim in spatial_in:
+        if not isinstance(dim, int) or dim <= 0:
+            raise ValidationError("Pooling input spatial dims must be positive ints.")
+        in_prod *= dim
+    for dim in spatial_out:
+        if not isinstance(dim, int) or dim <= 0:
+            raise ValidationError("Pooling output spatial dims must be positive ints.")
+        out_prod *= dim
+    if out_prod == 0 or in_prod % out_prod != 0:
+        raise ValidationError("Pooling window cannot be inferred from shapes.")
+    window = in_prod // out_prod
+    elems_out = shape_elements(out_shape, allow_none_leading=True)
+    # Approximate FLOPs: one compare/add per element in window per output.
+    flops = elems_out * window
+    return flops, 0
 
 
 def _require_channel(shape: Sequence[int | None], label: str) -> int:

@@ -127,6 +127,7 @@ def analyze_transformer(
         "activation_peak_bytes": activation_peak_bytes,
         "activation_sum_bytes": activation_sum_bytes,
         "activation_memory_bytes": activation_peak_bytes,
+        "activation_memory_is_exact": True,
         "flops_per_inference": flops_total,
         "total_flops": flops_total,
         "total_stream_bytes": (param_count * dtype_bytes) + activation_sum_bytes,
@@ -141,6 +142,7 @@ def analyze_transformer(
             "batch_size": batch_size,
             "sequence_length": seq_length,
             "precision_bits": dtype_bits,
+            "scenario_kind": "full_sequence",
         },
     }
 

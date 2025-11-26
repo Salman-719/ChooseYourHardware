@@ -36,7 +36,7 @@ def analyze_tree(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, batc
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops,
-        "total_flops": 1,  # treat compute as negligible; matcher will favor latency
+        "total_flops": flops,
         "total_stream_bytes": total_stream_bytes,
         "total_jumps": total_jumps,
         "extra": {},
@@ -69,7 +69,7 @@ def analyze_ensemble(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, 
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops,
-        "total_flops": 1,  # treat compute as negligible; matcher will favor latency
+        "total_flops": flops,
         "total_stream_bytes": total_stream_bytes,
         "total_jumps": total_jumps,
         "extra": {},

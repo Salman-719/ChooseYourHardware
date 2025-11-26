@@ -44,3 +44,12 @@ DISTANCE_METRICS = {"euclidean", "manhattan"}
 
 # Selection algorithms
 SELECTION_ALGORITHMS = {"none", "full_sort"}
+
+# Model scenario kinds
+SCENARIO_KINDS = {
+    "single_pass",
+    "per_iteration",
+    "full_sequence",
+    "full_sequence+decode",
+    "per_token",
+}

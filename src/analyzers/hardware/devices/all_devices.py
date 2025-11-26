@@ -8,17 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from utils.validators import (
-    require_int,
-    require_positive_number,
-)
-from utils.converters import (
-    apply_utilization as apply_util,
-    gb_to_bytes,
-    tflops_to_flops,
-    tops_to_ops,
-)
-ValidationError = ValueError
+from utils.validators import require_int, require_positive_number
+from utils.converters import apply_utilization as apply_util, gb_to_bytes, tflops_to_flops, tops_to_ops
+from analyzers.hardware.utils import normalize_latency_seconds, ValidationError
 
 DTYPE_MAP = {"fp32": 32, "fp16": 16, "bf16": 16, "int8": 8}
 
@@ -63,11 +55,19 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
         mem_channels = spec.get("memory_channels")
         mem_speed = spec.get("memory_speed_mtps")
         bus_width = spec.get("memory_bus_width_bits", 64)
-        if mem_channels and mem_speed:
+        if mem_channels is not None and mem_speed is not None:
+            if not isinstance(mem_channels, int) or mem_channels <= 0:
+                raise ValidationError("memory_channels must be a positive integer.")
+            if not isinstance(mem_speed, (int, float)) or mem_speed <= 0:
+                raise ValidationError("memory_speed_mtps must be a positive number.")
+            if not isinstance(bus_width, (int, float)) or bus_width <= 0:
+                raise ValidationError("memory_bus_width_bits must be a positive number when provided.")
             bytes_per_transfer = bus_width / 8.0
             bandwidth_bytes_per_s = mem_channels * mem_speed * 1e6 * bytes_per_transfer
             ram_bandwidth_gbps = bandwidth_bytes_per_s / 1e9
-    ram_bandwidth_bytes = None if ram_bandwidth_gbps is None else ram_bandwidth_gbps * 1e9
+    if ram_bandwidth_gbps is None:
+        raise ValidationError("ram_bandwidth_gbps is required or must be computable from memory_channels and memory_speed_mtps.")
+    ram_bandwidth_bytes = ram_bandwidth_gbps * 1e9
 
     l3_cache_bytes = None
     if "l3_cache_mb" in spec and isinstance(spec["l3_cache_mb"], (int, float)) and spec["l3_cache_mb"] > 0:
@@ -75,12 +75,8 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
     elif "l3_cache_bytes" in spec and isinstance(spec["l3_cache_bytes"], (int, float)) and spec["l3_cache_bytes"] > 0:
         l3_cache_bytes = int(spec["l3_cache_bytes"])
 
-    dram_latency_ns = spec.get("dram_latency_ns")
-    if not isinstance(dram_latency_ns, (int, float)) or dram_latency_ns <= 0:
-        dram_latency_ns = 100.0
-    cache_latency_ns = spec.get("cache_latency_ns")
-    if not isinstance(cache_latency_ns, (int, float)) or cache_latency_ns <= 0:
-        cache_latency_ns = 5.0
+    dram_latency_s = normalize_latency_seconds(spec, "dram")
+    cache_latency_s = normalize_latency_seconds(spec, "cache")
 
     supports_fp16 = bool(spec.get("supports_fp16", False))
     supports_bf16 = bool(spec.get("supports_bf16", False))
@@ -88,29 +84,34 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
 
     peak_flops = {"fp32": peak_fp32_flops, "fp16": None, "bf16": None}
     peak_ops = {"int8": None}
+    if supports_fp16 and peak_flops["fp16"] is None:
+        raise ValidationError("supports_fp16 is true but no peak_fp16_tflops provided.")
+    if supports_bf16 and peak_flops["bf16"] is None:
+        raise ValidationError("supports_bf16 is true but no peak_bf16_tflops provided.")
+    if supports_int8 and peak_ops["int8"] is None:
+        raise ValidationError("supports_int8 is true but no peak_int8_tops provided.")
+    dtype_support = {k: (v is not None) for k, v in {**peak_flops, **peak_ops}.items()}
     sustained_flops = {"fp32": apply_util(peak_flops["fp32"], utils["fp32"]), "fp16": None, "bf16": None}
-    sustained_ops = {"int8": apply_util(peak_ops["int8"], utils["int8"])}
+    sustained_ops = {"int8": None}
 
     total_threads = num_sockets * cores_per_socket * threads_per_core
 
     return {
-        "dtype_support": {"fp32": True, "fp16": supports_fp16, "bf16": supports_bf16, "int8": supports_int8},
+        "dtype_support": dtype_support,
         "dtype_map": DTYPE_MAP,
         "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
-        "memory_capacity_bytes": {"ram": ram_capacity_bytes, "vram": None},
-        "memory_bandwidth_bytes_per_s": {"ram": ram_bandwidth_bytes, "vram": None},
+        "memory_capacity_bytes": {"ram": ram_capacity_bytes, "vram": 0},
+        "memory_bandwidth_bytes_per_s": {"ram": ram_bandwidth_bytes, "vram": 0},
         "memory_model": "cpu_only",
         "host_device_bandwidth_bytes_per_s": None,
         "cpu_threads": total_threads,
         "num_gpus": None,
-        "dram_latency_ns": dram_latency_ns,
-        "cache_latency_ns": cache_latency_ns,
-        "memory_latency_seconds": dram_latency_ns * 1e-9,
-        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "dram_latency_s": dram_latency_s,
+        "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": l3_cache_bytes,
     }
 
@@ -139,16 +140,20 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         raise ValidationError("GPU vram_bandwidth_gbps is required.")
     vram_bandwidth_bytes = vram_bandwidth_gbps * 1e9
 
-    dram_latency_ns = spec.get("dram_latency_ns")
-    if not isinstance(dram_latency_ns, (int, float)) or dram_latency_ns <= 0:
-        dram_latency_ns = 300.0
-    cache_latency_ns = spec.get("cache_latency_ns")
-    if not isinstance(cache_latency_ns, (int, float)) or cache_latency_ns <= 0:
-        cache_latency_ns = 20.0
+    dram_latency_s = normalize_latency_seconds(spec, "dram")
+    cache_latency_s = normalize_latency_seconds(spec, "cache")
 
     supports_fp16 = bool(spec.get("supports_fp16", False))
     supports_bf16 = bool(spec.get("supports_bf16", False))
     supports_int8 = bool(spec.get("supports_int8", False))
+
+    if supports_fp16 and peak_flops["fp16"] is None:
+        raise ValidationError("supports_fp16 is true but peak_fp16_tflops is missing.")
+    if supports_bf16 and peak_flops["bf16"] is None:
+        raise ValidationError("supports_bf16 is true but peak_bf16_tflops is missing.")
+    if supports_int8 and peak_ops["int8"] is None:
+        raise ValidationError("supports_int8 is true but peak_int8_tops is missing.")
+    dtype_support = {k: (v is not None) for k, v in {**peak_flops, **peak_ops}.items()}
 
     pcie_bw = spec.get("pcie_bandwidth_gbps")
     nvlink_bw = spec.get("nvlink_bandwidth_gbps")
@@ -159,23 +164,21 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         host_bw = pcie_bw * 1e9
 
     return {
-        "dtype_support": {"fp32": True, "fp16": supports_fp16, "bf16": supports_bf16, "int8": supports_int8},
+        "dtype_support": dtype_support,
         "dtype_map": DTYPE_MAP,
         "utilization_assumptions": utils,
         "peak_flops_per_s": peak_flops,
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
-        "memory_capacity_bytes": {"ram": None, "vram": vram_capacity_bytes},
-        "memory_bandwidth_bytes_per_s": {"ram": None, "vram": vram_bandwidth_bytes},
+        "memory_capacity_bytes": {"ram": 0, "vram": vram_capacity_bytes},
+        "memory_bandwidth_bytes_per_s": {"ram": 0, "vram": vram_bandwidth_bytes},
         "memory_model": "separate",
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
-        "dram_latency_ns": dram_latency_ns,
-        "cache_latency_ns": cache_latency_ns,
-        "memory_latency_seconds": dram_latency_ns * 1e-9,
-        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "dram_latency_s": dram_latency_s,
+        "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": None,
     }
 
@@ -199,22 +202,22 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
             raise ValidationError("host_bandwidth_gbps must be a positive number when provided.")
         host_bw = bw * 1e9
 
-    dram_latency_ns = spec.get("dram_latency_ns")
-    if not isinstance(dram_latency_ns, (int, float)) or dram_latency_ns <= 0:
-        dram_latency_ns = 300.0
-    cache_latency_ns = spec.get("cache_latency_ns")
-    if not isinstance(cache_latency_ns, (int, float)) or cache_latency_ns <= 0:
-        cache_latency_ns = 20.0
+    dram_latency_s = normalize_latency_seconds(spec, "dram")
+    cache_latency_s = normalize_latency_seconds(spec, "cache")
 
-    dtype_support = {
-        "fp32": peak_fp32_flops is not None,
-        "fp16": bool(spec.get("supports_fp16", False)),
-        "bf16": bool(spec.get("supports_bf16", False)),
-        "int8": bool(spec.get("supports_int8", False)),
-    }
+    supports_fp16 = bool(spec.get("supports_fp16", False))
+    supports_bf16 = bool(spec.get("supports_bf16", False))
+    supports_int8 = bool(spec.get("supports_int8", False))
+    if supports_fp16 and peak_fp16_flops is None:
+        raise ValidationError("supports_fp16 is true but peak_fp16_tflops is missing.")
+    if supports_bf16 and peak_bf16_flops is None:
+        raise ValidationError("supports_bf16 is true but peak_bf16_tflops is missing.")
+    if supports_int8 and peak_int8_ops is None:
+        raise ValidationError("supports_int8 is true but peak_int8_tops is missing.")
 
     peak_flops = {"fp32": peak_fp32_flops, "fp16": peak_fp16_flops, "bf16": peak_bf16_flops}
     peak_ops = {"int8": peak_int8_ops}
+    dtype_support = {k: (v is not None) for k, v in {**peak_flops, **peak_ops}.items()}
     sustained_flops = {k: apply_util(v, utils[k]) for k, v in peak_flops.items()}
     sustained_ops = {"int8": apply_util(peak_ops["int8"], utils["int8"])}
 
@@ -226,16 +229,14 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
         "peak_ops_per_s": peak_ops,
         "sustained_flops_per_s": sustained_flops,
         "sustained_ops_per_s": sustained_ops,
-        "memory_capacity_bytes": {"ram": None, "vram": mem_capacity_bytes},
-        "memory_bandwidth_bytes_per_s": {"ram": None, "vram": mem_bandwidth_bytes},
+        "memory_capacity_bytes": {"ram": 0, "vram": mem_capacity_bytes},
+        "memory_bandwidth_bytes_per_s": {"ram": 0, "vram": mem_bandwidth_bytes},
         "memory_model": "separate",
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
-        "dram_latency_ns": dram_latency_ns,
-        "cache_latency_ns": cache_latency_ns,
-        "memory_latency_seconds": dram_latency_ns * 1e-9,
-        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "dram_latency_s": dram_latency_s,
+        "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": None,
     }
 
@@ -278,8 +279,10 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
     ram_bytes = gb_to_bytes(ram_capacity_gb)
 
     # For SoC, prefer CPU cache latency if present, else GPU.
-    dram_latency_ns = cpu_norm.get("dram_latency_ns") or gpu_norm.get("dram_latency_ns") or 300.0
-    cache_latency_ns = cpu_norm.get("cache_latency_ns") or gpu_norm.get("cache_latency_ns") or 10.0
+    dram_latency_s = cpu_norm.get("dram_latency_s") or gpu_norm.get("dram_latency_s")
+    cache_latency_s = cpu_norm.get("cache_latency_s") or gpu_norm.get("cache_latency_s")
+    if dram_latency_s is None or cache_latency_s is None:
+        raise ValidationError("Jetson latency seconds must be provided via CPU or GPU specs.")
     l3_cache_bytes = cpu_norm.get("l3_cache_bytes") or None
 
     dtype_support = merge_dtype_support(cpu_norm["dtype_support"], gpu_norm["dtype_support"])
@@ -306,10 +309,7 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
         "host_device_bandwidth_bytes_per_s": gpu_norm["host_device_bandwidth_bytes_per_s"],
         "cpu_threads": cpu_norm["cpu_threads"],
         "num_gpus": 1,
-        "dram_latency_ns": dram_latency_ns,
-        "cache_latency_ns": cache_latency_ns,
-        "memory_latency_seconds": dram_latency_ns * 1e-9,
-        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "dram_latency_s": dram_latency_s,
+        "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": l3_cache_bytes,
     }
-
