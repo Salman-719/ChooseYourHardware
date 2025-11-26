@@ -49,12 +49,6 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
-    @property
-    def prompts_dir(self) -> Path:
-        """Get prompts directory path."""
-        # For backward compatibility with metadata_extractor
-        return self.base_dir / "metadata_extractor" / "app" / "prompts"
-
 
 # Singleton instance
 settings = Settings()
