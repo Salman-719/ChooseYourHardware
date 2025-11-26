@@ -90,6 +90,9 @@ def analyze_knn(
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops_distance + flops_selection,
+        "total_flops": flops_distance + flops_selection,
+        "total_stream_bytes": (param_count * dtype_bytes) + (activation_elements * dtype_bytes),
+        "total_jumps": 0,
         "extra": {
             "k": k,
             "flops_distance_only": flops_distance,

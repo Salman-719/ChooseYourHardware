@@ -69,6 +69,19 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
             ram_bandwidth_gbps = bandwidth_bytes_per_s / 1e9
     ram_bandwidth_bytes = None if ram_bandwidth_gbps is None else ram_bandwidth_gbps * 1e9
 
+    l3_cache_bytes = None
+    if "l3_cache_mb" in spec and isinstance(spec["l3_cache_mb"], (int, float)) and spec["l3_cache_mb"] > 0:
+        l3_cache_bytes = int(spec["l3_cache_mb"] * 1e6)
+    elif "l3_cache_bytes" in spec and isinstance(spec["l3_cache_bytes"], (int, float)) and spec["l3_cache_bytes"] > 0:
+        l3_cache_bytes = int(spec["l3_cache_bytes"])
+
+    dram_latency_ns = spec.get("dram_latency_ns")
+    if not isinstance(dram_latency_ns, (int, float)) or dram_latency_ns <= 0:
+        dram_latency_ns = 100.0
+    cache_latency_ns = spec.get("cache_latency_ns")
+    if not isinstance(cache_latency_ns, (int, float)) or cache_latency_ns <= 0:
+        cache_latency_ns = 5.0
+
     supports_fp16 = bool(spec.get("supports_fp16", False))
     supports_bf16 = bool(spec.get("supports_bf16", False))
     supports_int8 = bool(spec.get("supports_int8", False))
@@ -94,6 +107,11 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
         "host_device_bandwidth_bytes_per_s": None,
         "cpu_threads": total_threads,
         "num_gpus": None,
+        "dram_latency_ns": dram_latency_ns,
+        "cache_latency_ns": cache_latency_ns,
+        "memory_latency_seconds": dram_latency_ns * 1e-9,
+        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "l3_cache_bytes": l3_cache_bytes,
     }
 
 
@@ -121,6 +139,13 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         raise ValidationError("GPU vram_bandwidth_gbps is required.")
     vram_bandwidth_bytes = vram_bandwidth_gbps * 1e9
 
+    dram_latency_ns = spec.get("dram_latency_ns")
+    if not isinstance(dram_latency_ns, (int, float)) or dram_latency_ns <= 0:
+        dram_latency_ns = 300.0
+    cache_latency_ns = spec.get("cache_latency_ns")
+    if not isinstance(cache_latency_ns, (int, float)) or cache_latency_ns <= 0:
+        cache_latency_ns = 20.0
+
     supports_fp16 = bool(spec.get("supports_fp16", False))
     supports_bf16 = bool(spec.get("supports_bf16", False))
     supports_int8 = bool(spec.get("supports_int8", False))
@@ -147,6 +172,11 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
+        "dram_latency_ns": dram_latency_ns,
+        "cache_latency_ns": cache_latency_ns,
+        "memory_latency_seconds": dram_latency_ns * 1e-9,
+        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "l3_cache_bytes": None,
     }
 
 
@@ -168,6 +198,13 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
         if not isinstance(bw, (int, float)) or bw <= 0:
             raise ValidationError("host_bandwidth_gbps must be a positive number when provided.")
         host_bw = bw * 1e9
+
+    dram_latency_ns = spec.get("dram_latency_ns")
+    if not isinstance(dram_latency_ns, (int, float)) or dram_latency_ns <= 0:
+        dram_latency_ns = 300.0
+    cache_latency_ns = spec.get("cache_latency_ns")
+    if not isinstance(cache_latency_ns, (int, float)) or cache_latency_ns <= 0:
+        cache_latency_ns = 20.0
 
     dtype_support = {
         "fp32": peak_fp32_flops is not None,
@@ -195,6 +232,11 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
         "host_device_bandwidth_bytes_per_s": host_bw,
         "cpu_threads": None,
         "num_gpus": 1,
+        "dram_latency_ns": dram_latency_ns,
+        "cache_latency_ns": cache_latency_ns,
+        "memory_latency_seconds": dram_latency_ns * 1e-9,
+        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "l3_cache_bytes": None,
     }
 
 
@@ -235,6 +277,11 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
     ram_capacity_gb = require_positive_number(spec, "ram_capacity_gb")
     ram_bytes = gb_to_bytes(ram_capacity_gb)
 
+    # For SoC, prefer CPU cache latency if present, else GPU.
+    dram_latency_ns = cpu_norm.get("dram_latency_ns") or gpu_norm.get("dram_latency_ns") or 300.0
+    cache_latency_ns = cpu_norm.get("cache_latency_ns") or gpu_norm.get("cache_latency_ns") or 10.0
+    l3_cache_bytes = cpu_norm.get("l3_cache_bytes") or None
+
     dtype_support = merge_dtype_support(cpu_norm["dtype_support"], gpu_norm["dtype_support"])
     peak_flops = sum_flops_dict(cpu_norm["peak_flops_per_s"], gpu_norm["peak_flops_per_s"])
     peak_ops = sum_ops_dict(cpu_norm["peak_ops_per_s"], gpu_norm["peak_ops_per_s"])
@@ -259,171 +306,11 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
         "host_device_bandwidth_bytes_per_s": gpu_norm["host_device_bandwidth_bytes_per_s"],
         "cpu_threads": cpu_norm["cpu_threads"],
         "num_gpus": 1,
+        "dram_latency_ns": dram_latency_ns,
+        "cache_latency_ns": cache_latency_ns,
+        "memory_latency_seconds": dram_latency_ns * 1e-9,
+        "cache_latency_seconds": cache_latency_ns * 1e-9,
+        "l3_cache_bytes": l3_cache_bytes,
     }
 
 
-def analyze_multi_gpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]:
-    if "cpu" not in spec or "gpus" not in spec:
-        raise ValidationError("multi_gpu_node requires 'cpu' and 'gpus'.")
-    if not isinstance(spec["gpus"], list) or not spec["gpus"]:
-        raise ValidationError("multi_gpu_node.gpus must be a non-empty list.")
-    cpu_norm = analyze_cpu_node(spec["cpu"], utils)
-    gpu_norms = [analyze_gpu(g, utils) for g in spec["gpus"]]
-
-    dtype_support = cpu_norm["dtype_support"].copy()
-    peak_flops = cpu_norm["peak_flops_per_s"].copy()
-    peak_ops = cpu_norm["peak_ops_per_s"].copy()
-    sustained_flops = cpu_norm["sustained_flops_per_s"].copy()
-    sustained_ops = cpu_norm["sustained_ops_per_s"].copy()
-
-    vram_total = 0
-    vram_bw = 0.0
-    host_bw = None
-    for g in gpu_norms:
-        dtype_support = merge_dtype_support(dtype_support, g["dtype_support"])
-        peak_flops = sum_flops_dict(peak_flops, g["peak_flops_per_s"])
-        peak_ops = sum_ops_dict(peak_ops, g["peak_ops_per_s"])
-        sustained_flops = sum_flops_dict(sustained_flops, g["sustained_flops_per_s"])
-        sustained_ops = sum_ops_dict(sustained_ops, g["sustained_ops_per_s"])
-        vram = g["memory_capacity_bytes"]["vram"]
-        if vram is not None:
-            vram_total += vram
-        vbw = g["memory_bandwidth_bytes_per_s"]["vram"]
-        if vbw is not None:
-            vram_bw += vbw
-        if host_bw is None and g["host_device_bandwidth_bytes_per_s"] is not None:
-            host_bw = g["host_device_bandwidth_bytes_per_s"]
-
-    ram_capacity_gb = require_positive_number(spec, "ram_capacity_gb")
-    ram_bytes = gb_to_bytes(ram_capacity_gb)
-
-    interconnect_bw = None
-    if "interconnect" in spec and isinstance(spec["interconnect"], dict):
-        bw = spec["interconnect"].get("bandwidth_gbps")
-        if bw is not None:
-            if not isinstance(bw, (int, float)) or bw <= 0:
-                raise ValidationError("interconnect.bandwidth_gbps must be a positive number when provided.")
-            interconnect_bw = bw * 1e9
-
-    num_gpus = len(gpu_norms)
-
-    aggregate = {
-        "peak_flops_per_s_by_dtype": peak_flops,
-        "sustained_flops_per_s_by_dtype": sustained_flops,
-        "ops_per_s_int8": {"peak": peak_ops.get("int8"), "sustained": sustained_ops.get("int8")},
-        "memory_capacity_bytes": {"ram_total": ram_bytes, "vram_total": vram_total},
-        "memory_bandwidth_bytes_per_s": {"vram_sum": vram_bw or None},
-        "num_nodes": 1,
-        "num_gpus_total": num_gpus,
-    }
-
-    return {
-        "dtype_support": dtype_support,
-        "dtype_map": DTYPE_MAP,
-        "utilization_assumptions": utils,
-        "peak_flops_per_s": peak_flops,
-        "peak_ops_per_s": peak_ops,
-        "sustained_flops_per_s": sustained_flops,
-        "sustained_ops_per_s": sustained_ops,
-        "memory_capacity_bytes": {"ram": ram_bytes, "vram": vram_total},
-        "memory_bandwidth_bytes_per_s": {"ram": cpu_norm["memory_bandwidth_bytes_per_s"]["ram"], "vram": vram_bw or None},
-        "memory_model": "separate",
-        # Host-device bandwidth: using first available GPU link or interconnect bandwidth if provided.
-        "host_device_bandwidth_bytes_per_s": host_bw if host_bw is not None else interconnect_bw,
-        "cpu_threads": cpu_norm["cpu_threads"],
-        "num_gpus": num_gpus,
-        "aggregate": aggregate,
-    }
-
-
-def analyze_cluster(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]:
-    if "nodes" not in spec or not isinstance(spec["nodes"], list) or not spec["nodes"]:
-        raise ValidationError("cluster.nodes must be a non-empty list.")
-
-    total_ram = 0
-    total_vram = 0
-    total_peak_flops = {"fp32": None, "fp16": None, "bf16": None}
-    total_peak_ops = {"int8": None}
-    total_sustained_flops = {"fp32": None, "fp16": None, "bf16": None}
-    dtype_support = {"fp32": False, "fp16": False, "bf16": False, "int8": False}
-    total_gpus = 0
-    cpu_threads = 0
-
-    node_count = len(spec["nodes"])
-    vram_bw_sum = 0.0
-
-    for node in spec["nodes"]:
-        if not isinstance(node, dict):
-            raise ValidationError("cluster.nodes entries must be objects.")
-        kind = node.get("kind")
-        node_spec = node.get("spec", {})
-        if kind == "multi_gpu_node":
-            norm = analyze_multi_gpu_node(node_spec, utils)
-        elif kind == "cpu_node":
-            norm = analyze_cpu_node(node_spec, utils)
-        else:
-            raise ValidationError("cluster nodes must be kind 'multi_gpu_node' or 'cpu_node'.")
-
-        dtype_support = merge_dtype_support(dtype_support, norm["dtype_support"])
-        total_peak_flops = sum_flops_dict(total_peak_flops, norm["peak_flops_per_s"])
-        total_peak_ops = sum_ops_dict(total_peak_ops, norm["peak_ops_per_s"])
-        total_sustained_flops = sum_flops_dict(total_sustained_flops, norm["sustained_flops_per_s"])
-
-        ram = norm["memory_capacity_bytes"]["ram"]
-        if ram:
-            total_ram += ram
-        vram = norm["memory_capacity_bytes"]["vram"]
-        if vram:
-            total_vram += vram
-        if norm["num_gpus"]:
-            total_gpus += norm["num_gpus"]
-        if norm["cpu_threads"]:
-            cpu_threads += norm["cpu_threads"]
-        vbw = norm["memory_bandwidth_bytes_per_s"]["vram"]
-        if vbw:
-            vram_bw_sum += vbw
-
-    network_bw = None
-    network_latency = None
-    if "network" in spec and isinstance(spec["network"], dict):
-        if "bandwidth_gbps" in spec["network"]:
-            bw = spec["network"]["bandwidth_gbps"]
-            if bw is not None:
-                if not isinstance(bw, (int, float)) or bw <= 0:
-                    raise ValidationError("cluster.network.bandwidth_gbps must be a positive number when provided.")
-                network_bw = bw * 1e9
-        if "latency_usec" in spec["network"]:
-            lat = spec["network"]["latency_usec"]
-            if lat is not None:
-                if not isinstance(lat, (int, float)) or lat <= 0:
-                    raise ValidationError("cluster.network.latency_usec must be a positive number when provided.")
-                network_latency = float(lat)
-
-    aggregate = {
-        "peak_flops_per_s_by_dtype": total_peak_flops,
-        "sustained_flops_per_s_by_dtype": total_sustained_flops,
-        "ops_per_s_int8": {"peak": total_peak_ops.get("int8"), "sustained": apply_util(total_peak_ops.get("int8"), utils["int8"])},
-        "memory_capacity_bytes": {"ram_total": total_ram, "vram_total": total_vram},
-        "memory_bandwidth_bytes_per_s": {"vram_sum": vram_bw_sum or None},
-        "num_nodes": node_count,
-        "num_gpus_total": total_gpus if total_gpus > 0 else None,
-    }
-
-    return {
-        "dtype_support": dtype_support,
-        "dtype_map": DTYPE_MAP,
-        "utilization_assumptions": utils,
-        "peak_flops_per_s": total_peak_flops,
-        "peak_ops_per_s": total_peak_ops,
-        "sustained_flops_per_s": total_sustained_flops,
-        "sustained_ops_per_s": {"int8": apply_util(total_peak_ops["int8"], utils["int8"])},
-        "memory_capacity_bytes": {"ram": total_ram, "vram": total_vram},
-        "memory_bandwidth_bytes_per_s": {"ram": None, "vram": None},
-        "memory_model": "separate" if total_vram > 0 else "cpu_only",
-        # Cluster: host_device bandwidth not used; network captures node-to-node link.
-        "host_device_bandwidth_bytes_per_s": None,
-        "cpu_threads": cpu_threads if cpu_threads > 0 else None,
-        "num_gpus": total_gpus if total_gpus > 0 else None,
-        "aggregate": aggregate,
-        "network": {"bandwidth_bytes_per_s": network_bw, "latency_usec": network_latency},
-    }

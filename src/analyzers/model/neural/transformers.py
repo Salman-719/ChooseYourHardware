@@ -127,6 +127,9 @@ def analyze_transformer(
         "activation_sum_bytes": activation_sum_bytes,
         "activation_memory_bytes": activation_peak_bytes,
         "flops_per_inference": flops_total,
+        "total_flops": flops_total,
+        "total_stream_bytes": (param_count * dtype_bytes) + activation_sum_bytes,
+        "total_jumps": 0,
         "extra": {
             "activation_elements_sum": activation_elements,
             "activation_peak_elements": activation_peak_elements,

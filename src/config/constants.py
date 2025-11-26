@@ -20,8 +20,6 @@ HARDWARE_KINDS = {
     "accelerator",
     "jetson",
     "soc",
-    "multi_gpu_node",
-    "cluster",
 }
 
 # Model types

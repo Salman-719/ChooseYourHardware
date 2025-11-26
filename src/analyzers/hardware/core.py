@@ -10,7 +10,7 @@ from .utils import resolve_utils
 from exceptions import HardwareValidationError as ValidationError
 
 
-ALLOWED_KINDS = {"cpu_node", "gpu", "tpu", "accelerator", "jetson", "soc", "multi_gpu_node", "cluster"}
+ALLOWED_KINDS = {"cpu_node", "gpu", "tpu", "accelerator", "jetson", "soc"}
 
 
 def _analyze_single_hardware(hardware: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]:
@@ -36,10 +36,6 @@ def _analyze_single_hardware(hardware: Dict[str, Any], utils: Dict[str, float]) 
         normalized = analyzers.analyze_accelerator(spec, utils)
     elif kind in {"jetson", "soc"}:
         normalized = analyzers.analyze_jetson(spec, utils)
-    elif kind == "multi_gpu_node":
-        normalized = analyzers.analyze_multi_gpu_node(spec, utils)
-    elif kind == "cluster":
-        normalized = analyzers.analyze_cluster(spec, utils)
     else:
         raise ValidationError(f"Unhandled kind '{kind}'.")
 

@@ -26,6 +26,8 @@ def analyze_tree(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, batc
 
     param_count = num_internal + num_leaves * output_dim
     flops = batch_size * avg_path
+    total_jumps = batch_size * avg_path
+    total_stream_bytes = (param_count * dtype_bytes) + (activation_elements * dtype_bytes)
     return {
         "model_type": "tree",
         "dtype_bits": dtype_bits,
@@ -33,6 +35,9 @@ def analyze_tree(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, batc
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops,
+        "total_flops": 1,  # treat compute as negligible; matcher will favor latency
+        "total_stream_bytes": total_stream_bytes,
+        "total_jumps": total_jumps,
         "extra": {},
     }
 
@@ -53,6 +58,8 @@ def analyze_ensemble(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, 
     param_count = num_trees * param_per_tree
     flops = batch_size * num_trees * avg_path
     activation_elements = batch_size * input_dim + batch_size * output_dim
+    total_jumps = batch_size * num_trees * avg_path
+    total_stream_bytes = (param_count * dtype_bytes) + (activation_elements * dtype_bytes)
 
     return {
         "model_type": config["model_type"],
@@ -61,5 +68,8 @@ def analyze_ensemble(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, 
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops,
+        "total_flops": 1,  # treat compute as negligible; matcher will favor latency
+        "total_stream_bytes": total_stream_bytes,
+        "total_jumps": total_jumps,
         "extra": {},
     }

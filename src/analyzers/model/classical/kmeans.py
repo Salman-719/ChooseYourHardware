@@ -45,6 +45,9 @@ def analyze_kmeans(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, ba
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_memory_bytes": activation_elements * dtype_bytes,
         "flops_per_inference": flops_iteration,
+        "total_flops": flops_iteration,
+        "total_stream_bytes": (num_points * num_features * dtype_bytes) + (param_count * dtype_bytes),
+        "total_jumps": 0,
         "extra": {
             "flops_per_iteration": flops_iteration,
         },
