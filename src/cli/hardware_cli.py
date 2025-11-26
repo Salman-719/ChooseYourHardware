@@ -7,9 +7,9 @@ import json
 import sys
 from pathlib import Path
 
-from ..analyzers.hardware import analyze_hardware_spec
-from ..exceptions import HardwareValidationError
-from ..utils import get_logger
+from analyzers.hardware.core import analyze_hardware_spec
+from exceptions.hardware_exceptions import HardwareValidationError
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 

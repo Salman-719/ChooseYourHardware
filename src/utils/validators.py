@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..config import DTYPE_BITS
-from ..exceptions import ModelValidationError
+from config.constants import DTYPE_BITS
+from exceptions.model_exceptions import ModelValidationError
 
 
 def load_json(model_json: str) -> dict[str, Any]:

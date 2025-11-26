@@ -8,8 +8,8 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from ..config import get_settings
-from ..utils import get_logger, setup_logging
+from config.settings import get_settings
+from utils.logging import get_logger, setup_logging
 from .v1.endpoints import hardware, models
 
 logger = get_logger(__name__)

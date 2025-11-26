@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..config import GB_TO_BYTES, TFLOPS_TO_FLOPS, TOPS_TO_OPS
+from config.constants import GB_TO_BYTES, TFLOPS_TO_FLOPS, TOPS_TO_OPS
 
 
 def gb_to_bytes(gb: float) -> int:

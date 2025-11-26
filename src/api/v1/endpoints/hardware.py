@@ -7,9 +7,9 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from ....analyzers.hardware import analyze_hardware_spec
-from ....exceptions import HardwareValidationError
-from ....utils import get_logger
+from analyzers.hardware.core import analyze_hardware_spec
+from exceptions.hardware_exceptions import HardwareValidationError
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from ....config import DISTANCE_METRICS, SELECTION_ALGORITHMS
-from ....exceptions import ModelValidationError
-from ....utils import require_bool, require_dict, require_int
+from config import DISTANCE_METRICS, SELECTION_ALGORITHMS
+from exceptions import ModelValidationError
+from utils import require_bool, require_dict, require_int
 
 
 def analyze_knn(

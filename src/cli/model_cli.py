@@ -5,9 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from ..analyzers.model import analyze_model
-from ..exceptions import ModelValidationError
-from ..utils import get_logger
+from analyzers.model.core import analyze_model
+from exceptions.model_exceptions import ModelValidationError
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
