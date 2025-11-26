@@ -18,7 +18,7 @@ from utils.converters import (
     tflops_to_flops,
     tops_to_ops,
 )
-from exceptions import HardwareValidationError as ValidationError
+ValidationError = ValueError
 
 DTYPE_MAP = {"fp32": 32, "fp16": 16, "bf16": 16, "int8": 8}
 
@@ -312,5 +312,4 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
         "cache_latency_seconds": cache_latency_ns * 1e-9,
         "l3_cache_bytes": l3_cache_bytes,
     }
-
 

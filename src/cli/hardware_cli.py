@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 from analyzers.hardware.core import analyze_hardware_spec
-from exceptions.hardware_exceptions import HardwareValidationError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0
 
-    except HardwareValidationError as exc:
+    except ValueError as exc:
         logger.error(f"Validation error: {exc}")
         return 1
     except FileNotFoundError:

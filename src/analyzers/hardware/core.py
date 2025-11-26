@@ -7,7 +7,8 @@ from typing import Any, Dict, List
 
 from .devices import all_devices as analyzers
 from .utils import resolve_utils
-from exceptions import HardwareValidationError as ValidationError
+
+ValidationError = ValueError
 
 
 ALLOWED_KINDS = {"cpu_node", "gpu", "tpu", "accelerator", "jetson", "soc"}

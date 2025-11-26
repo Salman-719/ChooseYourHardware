@@ -8,7 +8,6 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from analyzers.hardware.core import analyze_hardware_spec
-from exceptions.hardware_exceptions import HardwareValidationError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -76,7 +75,7 @@ async def analyze_hw_spec(request: HardwareAnalysisRequest) -> HardwareAnalysisR
     try:
         result = analyze_hardware_spec(request.hardware_spec)
         return HardwareAnalysisResponse(result=result, success=True)
-    except HardwareValidationError as exc:
+    except ValueError as exc:
         logger.error(f"Hardware validation error: {exc}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

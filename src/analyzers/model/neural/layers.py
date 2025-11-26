@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence, Tuple
 
-from exceptions import ModelValidationError as ValidationError
 from utils import (
     dtype_bits_from_string,
     require_bool,
@@ -12,6 +11,8 @@ from utils import (
     require_int,
     shape_elements,
 )
+
+ValidationError = ValueError
 
 
 def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:

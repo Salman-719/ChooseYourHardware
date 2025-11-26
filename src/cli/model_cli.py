@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from analyzers.model.core import analyze_model
-from exceptions.model_exceptions import ModelValidationError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         print(result)
         return 0
 
-    except ModelValidationError as exc:
+    except ValueError as exc:
         logger.error(f"Validation error: {exc}")
         return 1
     except Exception as exc:

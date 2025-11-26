@@ -14,6 +14,9 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 
+# Simple in-memory session store (per-process). Not durable across restarts/workers.
+_sessions: dict[str, dict[str, object]] = {}
+
 
 @router.post("/extract", response_model=MetadataExtractionResponse)
 async def extract_metadata(
@@ -43,7 +46,35 @@ async def extract_metadata(
     """
     try:
         logger.info(f"Extracting metadata for model type: {request.model_type}")
-        response = await extract_model_metadata(request)
+
+        session_state = None
+        if request.session_id:
+            if request.reset:
+                _sessions.pop(request.session_id, None)
+            session_state = _sessions.get(request.session_id, {})
+
+        effective_current = request.current_state
+        effective_last_question = request.last_question
+        if session_state:
+            if effective_current is None:
+                effective_current = session_state.get("current_state")
+            if effective_last_question is None:
+                effective_last_question = session_state.get("last_question")
+
+        req_for_service = MetadataExtractionRequest(
+            model_type=request.model_type,
+            last_question=effective_last_question,
+            user_input=request.user_input,
+            current_state=effective_current,
+        )
+
+        response = await extract_model_metadata(req_for_service)
+
+        if request.session_id:
+            _sessions[request.session_id] = {
+                "current_state": response.metadata,
+                "last_question": response.next_question,
+            }
         
         if response.is_complete:
             logger.info("Metadata extraction completed successfully")

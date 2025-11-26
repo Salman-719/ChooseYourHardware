@@ -11,19 +11,13 @@ class MetadataExtractionRequest(BaseModel):
     """Request model for metadata extraction."""
 
     model_type: str = Field(default="cnn", description="Type of ML model (e.g., cnn, transformer)")
+    session_id: Optional[str] = Field(
+        default=None, description="Optional session identifier to let the backend persist state between turns"
+    )
+    reset: bool = Field(default=False, description="When true with session_id, clears stored state before processing")
     last_question: Optional[str] = Field(None, description="Last question asked to user")
     user_input: Optional[str] = Field(None, description="User's response to the question")
     current_state: Optional[Dict[str, Any]] = Field(None, description="Current extraction state")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "model_type": "cnn",
-                "user_input": "It's a ResNet-50 model for image classification",
-                "current_state": {}
-            }
-        }
-    }
 
 
 class MetadataExtractionResponse(BaseModel):
@@ -32,16 +26,3 @@ class MetadataExtractionResponse(BaseModel):
     metadata: Dict[str, Any] = Field(..., description="Extracted model metadata")
     next_question: Optional[str] = Field(None, description="Next question to ask user")
     is_complete: bool = Field(default=False, description="Whether extraction is complete")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "metadata": {
-                    "model_name": "ResNet-50",
-                    "task": "image_classification"
-                },
-                "next_question": "How many layers does the model have?",
-                "is_complete": False
-            }
-        }
-    }

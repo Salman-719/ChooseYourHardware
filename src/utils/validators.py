@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 from config.constants import DTYPE_BITS
-from exceptions.model_exceptions import ModelValidationError
 
 
 def load_json(model_json: str) -> dict[str, Any]:
@@ -19,12 +18,12 @@ def load_json(model_json: str) -> dict[str, Any]:
         Parsed dictionary
 
     Raises:
-        ModelValidationError: If JSON is invalid
+        ValueError: If JSON is invalid
     """
     try:
         return json.loads(model_json)
     except json.JSONDecodeError as exc:
-        raise ModelValidationError(f"Invalid JSON: {exc}") from exc
+        raise ValueError(f"Invalid JSON: {exc}") from exc
 
 
 def require_dict(obj: Any, name: str) -> dict[str, Any]:
@@ -38,10 +37,10 @@ def require_dict(obj: Any, name: str) -> dict[str, Any]:
         The validated dictionary
 
     Raises:
-        ModelValidationError: If obj is not a dictionary
+        ValueError: If obj is not a dictionary
     """
     if not isinstance(obj, dict):
-        raise ModelValidationError(f"{name} must be an object", field=name, value=type(obj).__name__)
+        raise ValueError(f"{name} must be an object")
     return obj
 
 
@@ -57,17 +56,17 @@ def require_int(obj: dict[str, Any], key: str, *, positive: bool = False) -> int
         The validated integer
 
     Raises:
-        ModelValidationError: If validation fails
+        ValueError: If validation fails
     """
     if key not in obj:
-        raise ModelValidationError(f"Missing required field '{key}'", field=key)
+        raise ValueError(f"Missing required field '{key}'")
 
     val = obj[key]
     if not isinstance(val, int):
-        raise ModelValidationError(f"Field '{key}' must be an integer", field=key, value=type(val).__name__)
+        raise ValueError(f"Field '{key}' must be an integer")
 
     if positive and val <= 0:
-        raise ModelValidationError(f"Field '{key}' must be positive", field=key, value=val)
+        raise ValueError(f"Field '{key}' must be positive")
 
     return val
 
@@ -83,14 +82,14 @@ def require_bool(obj: dict[str, Any], key: str) -> bool:
         The validated boolean
 
     Raises:
-        ModelValidationError: If validation fails
+        ValueError: If validation fails
     """
     if key not in obj:
-        raise ModelValidationError(f"Missing required field '{key}'", field=key)
+        raise ValueError(f"Missing required field '{key}'")
 
     val = obj[key]
     if not isinstance(val, bool):
-        raise ModelValidationError(f"Field '{key}' must be a boolean", field=key, value=type(val).__name__)
+        raise ValueError(f"Field '{key}' must be a boolean")
 
     return val
 
@@ -106,14 +105,14 @@ def require_positive_number(obj: dict[str, Any], key: str) -> float:
         The validated number as float
 
     Raises:
-        ModelValidationError: If validation fails
+        ValueError: If validation fails
     """
     if key not in obj:
-        raise ModelValidationError(f"Missing required field '{key}'", field=key)
+        raise ValueError(f"Missing required field '{key}'")
 
     val = obj[key]
     if not isinstance(val, (int, float)) or val <= 0:
-        raise ModelValidationError(f"Field '{key}' must be a positive number", field=key, value=val)
+        raise ValueError(f"Field '{key}' must be a positive number")
 
     return float(val)
 
@@ -128,15 +127,11 @@ def dtype_bits_from_string(precision: str) -> int:
         Bit width (8, 16, or 32)
 
     Raises:
-        ModelValidationError: If precision string is invalid
+        ValueError: If precision string is invalid
     """
     bits = DTYPE_BITS.get(precision.lower())
     if bits is None:
-        raise ModelValidationError(
-            f"Unsupported precision string '{precision}'",
-            field="precision",
-            value=precision
-        )
+        raise ValueError(f"Unsupported precision string '{precision}'")
     return bits
 
 
@@ -151,7 +146,7 @@ def shape_elements(shape: list[int | None], *, allow_none_leading: bool = True) 
         Product of all dimensions
 
     Raises:
-        ModelValidationError: If dimensions are invalid
+        ValueError: If dimensions are invalid
     """
     dims = shape
     if allow_none_leading and shape and shape[0] is None:
@@ -160,10 +155,7 @@ def shape_elements(shape: list[int | None], *, allow_none_leading: bool = True) 
     total = 1
     for dim in dims:
         if not isinstance(dim, int) or dim <= 0:
-            raise ModelValidationError(
-                "All concrete dimensions must be positive integers",
-                value=dim
-            )
+            raise ValueError("All concrete dimensions must be positive integers")
         total *= dim
 
     return total

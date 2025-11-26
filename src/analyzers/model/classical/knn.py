@@ -6,8 +6,9 @@ import math
 from typing import Any
 
 from config import DISTANCE_METRICS, SELECTION_ALGORITHMS
-from exceptions import ModelValidationError
 from utils import require_bool, require_dict, require_int
+
+ValidationError = ValueError
 
 
 def analyze_knn(
@@ -35,7 +36,7 @@ def analyze_knn(
         - extra: Additional details (k, distance/selection FLOPs)
 
     Raises:
-        ModelValidationError: If configuration is invalid
+        ValueError: If configuration is invalid
     """
     knn_cfg = require_dict(config.get("knn_config"), "knn_config")
 
@@ -46,21 +47,13 @@ def analyze_knn(
 
     distance_metric = knn_cfg.get("distance_metric")
     if distance_metric not in DISTANCE_METRICS:
-        raise ModelValidationError(
-            f"distance_metric must be one of {DISTANCE_METRICS}",
-            field="distance_metric",
-            value=distance_metric
-        )
+        raise ValidationError(f"distance_metric must be one of {DISTANCE_METRICS} (got {distance_metric})")
 
     include_sqrt = require_bool(knn_cfg, "include_sqrt")
 
     selection_algorithm = knn_cfg.get("selection_algorithm")
     if selection_algorithm not in SELECTION_ALGORITHMS:
-        raise ModelValidationError(
-            f"selection_algorithm must be one of {SELECTION_ALGORITHMS}",
-            field="selection_algorithm",
-            value=selection_algorithm
-        )
+        raise ValidationError(f"selection_algorithm must be one of {SELECTION_ALGORITHMS} (got {selection_algorithm})")
 
     # Calculate FLOPs for distance computation
     if distance_metric == "euclidean":

@@ -38,7 +38,8 @@ class MetadataExtractor:
             self.model_fields_templates = json.load(f)
         
         with open(prompts_dir / "layer_types.json") as f:
-            self.layer_types = {"cnn": json.load(f)}
+            # Single catalog of allowed layers; used for all model types.
+            self.layer_types = json.load(f)
 
     async def extract_metadata(
         self, request: MetadataExtractionRequest
@@ -53,16 +54,17 @@ class MetadataExtractor:
         """
         try:
             # Get model fields template for the model type
-            model_fields = self.model_fields_templates.get(
-                request.model_type, self.model_fields_templates["cnn"]
-            )
+            import copy
+
+            model_fields_template = self.model_fields_templates.get(request.model_type)
+            if not isinstance(model_fields_template, dict):
+                raise ValueError(f"Unsupported model_type '{request.model_type}' for metadata extraction.")
+            model_fields = copy.deepcopy(model_fields_template)
             model_fields["filled"] = False
             model_fields["follow_up_question"] = "null"
 
             # Get allowed layers for the model type
-            allowed_layers = self.layer_types.get(
-                request.model_type, self.layer_types["cnn"]
-            )
+            allowed_layers = self.layer_types.get(request.model_type) or self.layer_types.get("all_layers") or []
 
             # Current state
             current_state = request.current_state or {}

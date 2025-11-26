@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from exceptions import ModelValidationError as ValidationError
 from utils import require_bool, require_dict, require_int
+
+ValidationError = ValueError
 
 
 def analyze_kmeans(config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, batch_size: int) -> Dict[str, Any]:

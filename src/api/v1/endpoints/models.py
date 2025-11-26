@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from analyzers.model.core import analyze_model
-from exceptions.model_exceptions import ModelValidationError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -57,7 +56,7 @@ async def analyze_ml_model(request: ModelAnalysisRequest) -> ModelAnalysisRespon
     try:
         result = analyze_model(request.model_json)
         return ModelAnalysisResponse(result=result, success=True)
-    except ModelValidationError as exc:
+    except ValueError as exc:
         logger.error(f"Model validation error: {exc}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

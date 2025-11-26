@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from .transformers import _dense_flops, _layernorm_flops
-from exceptions import ModelValidationError as ValidationError
 from utils import require_bool, require_dict, require_int
+
+ValidationError = ValueError
 
 
 def analyze_llm_decoder(

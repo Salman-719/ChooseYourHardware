@@ -2,9 +2,7 @@
   "cnn": {
     "usage_constraints": {
       "batch_size": 4,
-      "latency_mode": "per_inference",
-      "target_latency_s": 0.1,
-      "use_case": "batch_offline"
+      "target_latency_s": 0.1
     },
 
     "model_level": {

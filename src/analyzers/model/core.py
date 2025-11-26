@@ -6,8 +6,9 @@ from typing import Any, Dict, Optional
 
 from .classical import knn, kmeans, trees
 from .neural import layers, llm, transformers
-from exceptions import ModelValidationError as ValidationError
 from utils import dtype_bits_from_string, load_json, require_dict, require_int
+
+ValidationError = ValueError
 
 
 def analyze_model(model_json: str) -> str:
