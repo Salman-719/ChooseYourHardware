@@ -12,12 +12,19 @@ Your tasks:
 1. Update the CURRENT_JSON_STATE using any new information from the user's message.  
    - Fill fields using model.summary() text OR explicit user statements.  
    - ONLY fill a field if the value is explicitly known or can be deduced safely from the new information.  
+   - Extract ALL information present in the user's message, even if it answers multiple fields at once.
    - NEVER delete or overwrite a previously filled field unless the new information is clearly more accurate.
    - NEVER guess unknown values.
+   - When the user provides layer information in formats like "conv1 Conv2d output_shape [null,64,112,112] params 9408", parse it into proper layer objects.
 
 2. Validation:
    - If a layer is described but not in the allowed-layer list, map it to the closest allowed layer.
    - If impossible, leave the field empty.
+
+3. Layer Parsing:
+   - Recognize common formats: "layer_name LayerType output_shape [...] params N"
+   - Handle both array notation [null,64,112,112] and tuple notation (None,64,112,112)
+   - Accept comma-separated or semicolon-separated layer lists
 
 STRICT RULES:
 - Output MUST be a single JSON object representing the updated state.
