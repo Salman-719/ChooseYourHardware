@@ -1,7 +1,8 @@
 from fastapi import FastAPI
-from .routers.extractor_router import router as extractor_router
-
 from fastapi.middleware.cors import CORSMiddleware
+
+from .routers.extractor_router import router as extractor_router
+from .routers.web_search_router import router as web_search_router
 
 app = FastAPI(
     title="Metadata Extractor API",
@@ -17,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(extractor_router)
+app.include_router(web_search_router)
 
 @app.get("/")
 def root():

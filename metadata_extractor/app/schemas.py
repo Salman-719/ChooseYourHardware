@@ -8,3 +8,14 @@ class ExtractionRequest(BaseModel):
 
 class ExtractionResponse(BaseModel):
     metadata: dict
+
+
+class WebSearchRequest(BaseModel):
+    query: str
+    context: str | None = None
+    model: str | None = None
+
+
+class WebSearchResponse(BaseModel):
+    answer: str
+    model_used: str

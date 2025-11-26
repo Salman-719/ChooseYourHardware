@@ -17,10 +17,13 @@ if OPENAI_API_KEY is None:
 if OPENAI_LLM_MODEL is None:
     OPENAI_LLM_MODEL = "o4-mini"
 
+OPENAI_WEB_MODEL = os.getenv("OPENAI_WEB_MODEL") or OPENAI_LLM_MODEL
+
 ASKER_PROMPT_PATH = PROMPTS_DIR / "metadata_extractor_asker.txt"
 UPDATER_PROMPT_PATH = PROMPTS_DIR / "metadata_extractor_updater.txt"
 MODEL_FIELDS_PATH = PROMPTS_DIR / "model_fields.json"
 LAYER_TYPES_PATH = PROMPTS_DIR / "layer_types.json"
+WEB_SEARCH_SYSTEM_PROMPT_PATH = PROMPTS_DIR / "web_search_system_prompt.txt"
 
 with open(ASKER_PROMPT_PATH) as f:
     ASKER_PROMPT = f.read()
@@ -33,3 +36,6 @@ with open(MODEL_FIELDS_PATH) as f:
 
 with open(LAYER_TYPES_PATH) as f:
     LAYER_TYPES = {"cnn": json.loads(f.read())}
+
+with open(WEB_SEARCH_SYSTEM_PROMPT_PATH) as f:
+    WEB_SEARCH_SYSTEM_PROMPT = f.read().strip()
