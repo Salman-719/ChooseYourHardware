@@ -135,12 +135,14 @@ def analyze_llm_decoder(
     flops_per_token_decode = num_layers * flops_decode_layer
 
     kv_cache_bytes = 0
+    has_kv_cache = include_kv_cache
     if include_kv_cache:
         kv_elements = 2 * num_layers * batch_size * seq_length * hidden_size
         kv_cache_bytes = kv_elements * dtype_bytes
 
     activation_sum_bytes = activation_elements * dtype_bytes
     activation_peak_bytes = activation_peak_elements * dtype_bytes
+    activation_memory_bytes = max(activation_peak_bytes, kv_cache_bytes) if has_kv_cache else activation_peak_bytes
 
     return {
         "model_type": "llm_decoder",
@@ -149,9 +151,12 @@ def analyze_llm_decoder(
         "param_memory_bytes": param_count * dtype_bytes,
         "activation_peak_bytes": activation_peak_bytes,
         "activation_sum_bytes": activation_sum_bytes,
-        "activation_memory_bytes": activation_peak_bytes,
+        "activation_memory_bytes": activation_memory_bytes,
+        "activation_memory_is_exact": True,
         "flops_per_inference": flops_total,
         "total_flops": flops_total,
+        "flops_prefill": flops_total,
+        "flops_per_token_decode": flops_per_token_decode,
         "total_stream_bytes": (param_count * dtype_bytes) + activation_sum_bytes,
         "total_jumps": 0,
         "extra": {
@@ -162,9 +167,12 @@ def analyze_llm_decoder(
             "activation_peak_bytes": activation_peak_bytes,
             "layers": layer_details,
         },
+        "kv_cache_bytes": kv_cache_bytes,
+        "has_kv_cache": has_kv_cache,
         "inference_scenario": {
             "batch_size": batch_size,
             "sequence_length": seq_length,
             "precision_bits": dtype_bits,
+            "scenario_kind": "full_sequence+decode",
         },
     }

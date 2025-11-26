@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
+from config import SCENARIO_KINDS
+
 
 def _pick_dtype_key(model: Dict[str, Any]) -> str:
     """Pick dtype key for FLOP lookup based on model precision."""
@@ -39,6 +41,51 @@ def _memory_bandwidth_bytes_per_s(hardware: Dict[str, Any]) -> Optional[float]:
     return bw.get("vram") or bw.get("ram")
 
 
+def _scenario_flops(model: Dict[str, Any]) -> float:
+    scenario = model.get("inference_scenario") or {}
+    scenario_kind = scenario.get("scenario_kind")
+    if scenario_kind not in SCENARIO_KINDS:
+        raise ValueError(f"scenario_kind must be one of {SCENARIO_KINDS} (got {scenario_kind}).")
+
+    extra = model.get("extra") or {}
+    total_flops_field = model.get("total_flops")
+    flops_per_inference = model.get("flops_per_inference")
+
+    if scenario_kind == "single_pass":
+        if total_flops_field is None and flops_per_inference is None:
+            raise ValueError("single_pass scenario requires total_flops or flops_per_inference.")
+        return float(total_flops_field or flops_per_inference or 0.0)
+
+    if scenario_kind == "per_iteration":
+        flops_iter = extra.get("flops_per_iteration")
+        num_iter = extra.get("num_iterations")
+        if flops_iter is None or num_iter is None:
+            raise ValueError("per_iteration scenario requires extra.flops_per_iteration and extra.num_iterations.")
+        return float(flops_iter) * float(num_iter)
+
+    if scenario_kind == "full_sequence":
+        if total_flops_field is None and flops_per_inference is None:
+            raise ValueError("full_sequence scenario requires total_flops or flops_per_inference.")
+        return float(total_flops_field or flops_per_inference or 0.0)
+
+    if scenario_kind == "full_sequence+decode":
+        flops_prefill = model.get("flops_prefill")
+        flops_decode = model.get("flops_per_token_decode")
+        if flops_prefill is None or flops_decode is None:
+            raise ValueError("full_sequence+decode scenario requires flops_prefill and flops_per_token_decode.")
+        decode_tokens = extra.get("decode_tokens")
+        if decode_tokens is not None:
+            return float(flops_prefill) + float(decode_tokens) * float(flops_decode)
+        return float(flops_prefill)
+
+    if scenario_kind == "per_token":
+        if flops_per_inference is None:
+            raise ValueError("per_token scenario requires flops_per_inference.")
+        return float(flops_per_inference)
+
+    raise ValueError(f"Unhandled scenario_kind {scenario_kind}")
+
+
 def estimate_latency(model: Dict[str, Any], hardware: Dict[str, Any]) -> float:
     """Estimate end-to-end latency (seconds) by selecting the dominant bottleneck."""
     latency, _ = calculate_inference_metrics(model, hardware)
@@ -47,7 +94,7 @@ def estimate_latency(model: Dict[str, Any], hardware: Dict[str, Any]) -> float:
 
 def calculate_inference_metrics(model: Dict[str, Any], hardware: Dict[str, Any]) -> Tuple[float, str]:
     """Return (estimated_latency_seconds, bottleneck_label)."""
-    total_flops = model.get("total_flops") or model.get("flops_per_inference") or 0.0
+    total_flops = _scenario_flops(model)
     total_stream_bytes = model.get("total_stream_bytes") or model.get("param_memory_bytes") or 0.0
     total_jumps = model.get("total_jumps", 0) or 0
 
@@ -62,17 +109,14 @@ def calculate_inference_metrics(model: Dict[str, Any], hardware: Dict[str, Any])
     t_bandwidth = (total_stream_bytes / bandwidth) if bandwidth and total_stream_bytes else 0.0
 
     l3_cache_bytes = hardware.get("l3_cache_bytes") or 0
-    cache_latency_ns = hardware.get("cache_latency_ns") or 5.0
-    dram_latency_ns = hardware.get("dram_latency_ns") or 100.0
-    # Allow seconds inputs when provided.
-    cache_latency_seconds = hardware.get("cache_latency_seconds")
-    dram_latency_seconds = hardware.get("memory_latency_seconds")
-    if isinstance(cache_latency_seconds, (int, float)) and cache_latency_seconds > 0:
-        cache_latency_ns = cache_latency_seconds * 1e9
-    if isinstance(dram_latency_seconds, (int, float)) and dram_latency_seconds > 0:
-        dram_latency_ns = dram_latency_seconds * 1e9
-    is_in_cache = bool(l3_cache_bytes and model.get("param_memory_bytes", 0) < l3_cache_bytes)
-    latency_per_jump_s = (cache_latency_ns if is_in_cache else dram_latency_ns) * 1e-9
+    cache_latency_s = hardware.get("cache_latency_s")
+    dram_latency_s = hardware.get("dram_latency_s")
+    cache_latency_s = cache_latency_s if isinstance(cache_latency_s, (int, float)) and cache_latency_s > 0 else None
+    dram_latency_s = dram_latency_s if isinstance(dram_latency_s, (int, float)) and dram_latency_s > 0 else None
+    latency_per_jump_s = 0.0
+    if dram_latency_s is not None and cache_latency_s is not None:
+        is_in_cache = bool(l3_cache_bytes and model.get("param_memory_bytes", 0) < l3_cache_bytes)
+        latency_per_jump_s = cache_latency_s if is_in_cache else dram_latency_s
     t_latency = total_jumps * latency_per_jump_s
 
     estimated = max(t_compute, t_bandwidth, t_latency)

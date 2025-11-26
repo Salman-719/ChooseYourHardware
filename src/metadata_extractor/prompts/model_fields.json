@@ -317,5 +317,84 @@
         "params": 295168
       }
     ]
+  },
+  "knn": {
+    "model_type": "knn",
+    "precision": "fp32",
+    "inference_config": {
+      "batch_size": 4
+    },
+    "knn_config": {
+      "num_train_samples": 1000,
+      "num_features": 128,
+      "k": 8,
+      "distance_metric": "euclidean",
+      "include_sqrt": true,
+      "selection_algorithm": "full_sort"
+    }
+  },
+  "kmeans": {
+    "model_type": "kmeans",
+    "precision": "fp32",
+    "inference_config": {
+      "batch_size": 4
+    },
+    "kmeans_config": {
+      "num_points": 10000,
+      "num_features": 64,
+      "num_clusters": 16,
+      "cluster_sizes": [625,625,625,625,625,625,625,625,625,625,625,625,625,625,625,625],
+      "distance_metric": "euclidean",
+      "include_sqrt": true,
+      "num_iterations": 10
+    }
+  },
+  "tree": {
+    "model_type": "tree",
+    "precision": "fp32",
+    "inference_config": {
+      "batch_size": 4
+    },
+    "tree_config": {
+      "num_internal_nodes": 255,
+      "num_leaves": 256,
+      "output_dim": 1,
+      "average_path_length": 16,
+      "input_dim": 128
+    }
+  },
+  "random_forest": {
+    "model_type": "random_forest",
+    "precision": "fp32",
+    "inference_config": {
+      "batch_size": 4
+    },
+    "ensemble_config": {
+      "num_trees": 100,
+      "tree_config": {
+        "num_internal_nodes": 255,
+        "num_leaves": 256,
+        "output_dim": 1,
+        "average_path_length": 16,
+        "input_dim": 128
+      }
+    }
+  },
+  "gradient_boosted_trees": {
+    "model_type": "gradient_boosted_trees",
+    "precision": "fp32",
+    "inference_config": {
+      "batch_size": 4
+    },
+    "ensemble_config": {
+      "num_trees": 200,
+      "tree_config": {
+        "num_internal_nodes": 255,
+        "num_leaves": 256,
+        "output_dim": 1,
+        "average_path_length": 16,
+        "input_dim": 128
+      }
+    }
   }
 }

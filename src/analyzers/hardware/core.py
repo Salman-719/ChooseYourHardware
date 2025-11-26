@@ -55,7 +55,7 @@ def analyze_hardware_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     if "hardware_list" not in spec or not isinstance(spec["hardware_list"], list) or not spec["hardware_list"]:
         raise ValidationError("hardware_list must be a non-empty list.")
 
-    utils = resolve_utils(spec.get("defaults", {}))
+    utils = resolve_utils(spec.get("defaults"))
 
     analyses: List[Dict[str, Any]] = []
     for hw in spec["hardware_list"]:

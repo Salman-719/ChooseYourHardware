@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from config import SCENARIO_KINDS
 from .classical import knn, kmeans, trees
 from .neural import layers, llm, transformers
 from utils import dtype_bits_from_string, load_json, require_dict, require_int
@@ -33,7 +34,15 @@ def _dispatch(raw: Dict[str, Any]) -> Dict[str, Any]:
     # Neural network summary style input: expect a single key like "cnn" or "neural_network".
     nn_keys = [k for k in raw.keys()]
     if len(nn_keys) == 1:
-        return layers.analyze_neural_summary(require_dict(raw[nn_keys[0]], nn_keys[0]))
+        result = layers.analyze_neural_summary(require_dict(raw[nn_keys[0]], nn_keys[0]))
+        scenario = _build_scenario(
+            result["inference_scenario"]["batch_size"],
+            result["inference_scenario"]["sequence_length"],
+            result["inference_scenario"]["precision_bits"],
+            "single_pass",
+        )
+        result["inference_scenario"] = scenario
+        return result
     raise ValidationError("Unable to determine model_type; provide 'model_type' or a single neural network root key.")
 
 
@@ -71,39 +80,41 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     if model_type == "knn":
         result = knn.analyze_knn(raw, dtype_bits, dtype_bytes, batch_size)
+        scenario_kind = "single_pass"
     elif model_type == "kmeans":
         result = kmeans.analyze_kmeans(raw, dtype_bits, dtype_bytes, batch_size)
+        scenario_kind = "per_iteration"
     elif model_type == "tree":
         result = trees.analyze_tree(raw, dtype_bits, dtype_bytes, batch_size)
+        scenario_kind = "single_pass"
     elif model_type in {"random_forest", "gradient_boosted_trees"}:
         result = trees.analyze_ensemble(raw, dtype_bits, dtype_bytes, batch_size)
+        scenario_kind = "single_pass"
     elif model_type == "neural_network":
         nn_root = require_dict(raw.get("nn_config"), "nn_config")
         result = layers.analyze_neural_summary(nn_root)
+        scenario_kind = "single_pass"
     elif model_type == "transformer":
         if seq_length is None:
             raise ValidationError("sequence_length is required for transformer models.")
         result = transformers.analyze_transformer(raw, dtype_bits, dtype_bytes, batch_size, seq_length)
+        scenario_kind = "full_sequence"
     elif model_type == "llm_decoder":
         if seq_length is None:
             raise ValidationError("sequence_length is required for llm_decoder models.")
         result = llm.analyze_llm_decoder(raw, dtype_bits, dtype_bytes, batch_size, seq_length)
+        scenario_kind = "full_sequence+decode"
     else:
         raise ValidationError(f"Unhandled model_type '{model_type}'.")
 
     # Attach scenario and activation clarity for hardware matching.
-    if "inference_scenario" not in result:
-        result["inference_scenario"] = {
-            "batch_size": batch_size,
-            "sequence_length": seq_length if seq_length is not None else None,
-            "precision_bits": dtype_bits,
-        }
+    scenario = _build_scenario(batch_size, seq_length, dtype_bits, scenario_kind)
+    result["inference_scenario"] = scenario
     if "activation_memory_bytes" in result:
         act_bytes = result["activation_memory_bytes"]
         result.setdefault("activation_sum_bytes", act_bytes)
         result.setdefault("activation_peak_bytes", act_bytes)
-        # Prefer peak as the canonical activation_memory_bytes.
-        result["activation_memory_bytes"] = result["activation_peak_bytes"]
+        result["activation_memory_bytes"] = result.get("activation_memory_bytes", act_bytes)
     return result
 
 
@@ -119,11 +130,22 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
     model_level = require_dict(raw.get("model_level"), "model_level")
     model_type = model_level.get("model_type")
     if model_type in {"transformer", "transformer_encoder"}:
-        return _analyze_transformer_from_metadata(raw)
-    if model_type in {"llm", "llm_decoder"}:
-        return _analyze_llm_from_metadata(raw)
-    # Default: treat as generic neural summary.
-    return layers.analyze_neural_summary(raw)
+        result = _analyze_transformer_from_metadata(raw)
+        scenario_kind = "full_sequence"
+    elif model_type in {"llm", "llm_decoder"}:
+        result = _analyze_llm_from_metadata(raw)
+        scenario_kind = "full_sequence+decode"
+    else:
+        result = layers.analyze_neural_summary(raw)
+        scenario_kind = "single_pass"
+    scenario = _build_scenario(
+        result["inference_scenario"]["batch_size"],
+        result["inference_scenario"]["sequence_length"],
+        result["inference_scenario"]["precision_bits"],
+        scenario_kind,
+    )
+    result["inference_scenario"] = scenario
+    return result
 
 
 def _analyze_transformer_from_metadata(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -241,3 +263,14 @@ def _get_bool_with_default(obj: Dict[str, Any], key: str, default: bool) -> bool
     if not isinstance(val, bool):
         raise ValidationError(f"{key} must be a boolean when provided.")
     return val
+
+
+def _build_scenario(batch_size: int, seq_length: Optional[int], dtype_bits: int, scenario_kind: str) -> Dict[str, Any]:
+    if scenario_kind not in SCENARIO_KINDS:
+        raise ValidationError(f"scenario_kind must be one of {SCENARIO_KINDS} (got {scenario_kind}).")
+    return {
+        "batch_size": batch_size,
+        "sequence_length": seq_length if seq_length is not None else None,
+        "precision_bits": dtype_bits,
+        "scenario_kind": scenario_kind,
+    }
