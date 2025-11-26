@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     """Application configuration settings."""
 
     # API Configuration
+    app_version: str = "1.0.0"
+    environment: str = Field("development", alias="ENV")
     api_title: str = "ChooseYourHardware API"
     api_version: str = "1.0.0"
     api_prefix: str = "/api/v1"
@@ -56,3 +58,12 @@ class Settings(BaseSettings):
 
 # Singleton instance
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """Get application settings instance.
+
+    Returns:
+        Settings singleton instance
+    """
+    return settings

@@ -10,10 +10,12 @@ from .constants import (
     TFLOPS_TO_FLOPS,
     TOPS_TO_OPS,
 )
-from .settings import settings
+from .settings import Settings, get_settings, settings
 
 __all__ = [
     "settings",
+    "Settings",
+    "get_settings",
     "DTYPE_BITS",
     "HARDWARE_KINDS",
     "MODEL_TYPES",
