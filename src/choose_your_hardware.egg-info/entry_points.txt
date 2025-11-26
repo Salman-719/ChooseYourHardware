@@ -1,0 +1,3 @@
+[console_scripts]
+analyze-hardware = choose_your_hardware.cli.hardware_cli:main
+analyze-model = choose_your_hardware.cli.model_cli:main

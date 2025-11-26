@@ -1,0 +1,47 @@
+{
+  "metadata": {
+    "filled": true,
+    "follow_up_question": "",
+    "usage_constraints": {
+      "batch_size": 8,
+      "latency_mode": "per_inference",
+      "target_latency_s": 0.05,
+      "use_case": "realtime_vision"
+    },
+    "model_level": {
+      "input_shape": [3, 32, 32],
+      "precision": "fp32",
+      "total_params": 1311178,
+      "trainable_params": 1311178,
+      "non_trainable_params": 0,
+      "framework": "pytorch",
+      "model_type": "cnn"
+    },
+    "layer_summary": [
+      {
+        "name": "conv1",
+        "type": "Conv2d",
+        "output_shape": [null, 16, 32, 32],
+        "params": 448
+      },
+      {
+        "name": "relu1",
+        "type": "ReLU",
+        "output_shape": [null, 16, 32, 32],
+        "params": 0
+      },
+      {
+        "name": "flatten",
+        "type": "Flatten",
+        "output_shape": [null, 16384],
+        "params": 0
+      },
+      {
+        "name": "fc",
+        "type": "Dense",
+        "output_shape": [null, 10],
+        "params": 1310730
+      }
+    ]
+  }
+}

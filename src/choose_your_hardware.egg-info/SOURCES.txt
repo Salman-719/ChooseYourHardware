@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+src/choose_your_hardware/__init__.py
+src/choose_your_hardware.egg-info/PKG-INFO
+src/choose_your_hardware.egg-info/SOURCES.txt
+src/choose_your_hardware.egg-info/dependency_links.txt
+src/choose_your_hardware.egg-info/entry_points.txt
+src/choose_your_hardware.egg-info/requires.txt
+src/choose_your_hardware.egg-info/top_level.txt
