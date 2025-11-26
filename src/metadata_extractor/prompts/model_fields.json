@@ -4,9 +4,8 @@
       "batch_size": 4,
       "target_latency_s": 0.1
     },
-
     "model_level": {
-      "input_shape": [3, 224, 224], 
+      "input_shape": [3, 224, 224],
       "precision": "fp32",
       "total_params": 11796954,
       "trainable_params": 11796954,
@@ -14,7 +13,6 @@
       "framework": "pytorch",
       "model_type": "cnn"
     },
-
     "layer_summary": [
       {
         "name": "conv1",
@@ -30,93 +28,275 @@
       }
     ]
   },
-
-
-  "unet": [
-    "input_shape",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "num_down_blocks",
-    "num_up_blocks",
-    "has_skip_connections"
-  ],
-
-  "fpn": [
-    "input_shape",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "backbone",
-    "pyramid_levels"
-  ],
-
-  "vit": [
-    "input_shape",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "patch_size",
-    "hidden_dim",
-    "num_heads",
-    "num_layers"
-  ],
-
-  "transformer_encoder": [
-    "sequence_length",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "hidden_dim",
-    "num_heads",
-    "num_layers"
-  ],
-
-  "llm": [
-    "context_length",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "hidden_dim",
-    "num_heads",
-    "num_layers",
-    "vocab_size"
-  ],
-
-  "mlp": [
-    "input_dim",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "hidden_layers",
-    "output_dim"
-  ],
-
-  "rnn": [
-    "input_dim",
-    "precision",
-    "total_params",
-    "layer_summary",
-    "hidden_dim",
-    "num_layers",
-    "bidirectional"
-  ],
-
-  "gan": [
-    "latent_dim",
-    "precision",
-    "total_params",
-    "generator_params",
-    "discriminator_params",
-    "layer_summary"
-  ],
-
-  "diffusion": [
-    "precision",
-    "total_params",
-    "layer_summary",
-    "num_resolutions",
-    "unet_channels",
-    "num_steps"
-  ]
+  "unet": {
+    "usage_constraints": {
+      "batch_size": 2,
+      "target_latency_s": 0.15
+    },
+    "model_level": {
+      "input_shape": [3, 256, 256],
+      "precision": "fp32",
+      "total_params": 31000000,
+      "model_type": "unet",
+      "num_down_blocks": 4,
+      "num_up_blocks": 4,
+      "has_skip_connections": true
+    },
+    "layer_summary": [
+      {
+        "name": "enc_conv1",
+        "type": "Conv2d",
+        "output_shape": [null, 64, 256, 256],
+        "params": 1792
+      },
+      {
+        "name": "enc_bn1",
+        "type": "BatchNorm2d",
+        "output_shape": [null, 64, 256, 256],
+        "params": 128
+      },
+      {
+        "name": "dec_conv1",
+        "type": "Conv2d",
+        "output_shape": [null, 64, 256, 256],
+        "params": 36928
+      }
+    ]
+  },
+  "fpn": {
+    "usage_constraints": {
+      "batch_size": 2,
+      "target_latency_s": 0.12
+    },
+    "model_level": {
+      "input_shape": [3, 224, 224],
+      "precision": "fp16",
+      "total_params": 50000000,
+      "model_type": "fpn",
+      "backbone": "resnet50",
+      "pyramid_levels": [3, 4, 5]
+    },
+    "layer_summary": [
+      {
+        "name": "c3_reduction",
+        "type": "Conv2d",
+        "output_shape": [null, 256, 56, 56],
+        "params": 7168
+      },
+      {
+        "name": "c3_bn",
+        "type": "BatchNorm2d",
+        "output_shape": [null, 256, 56, 56],
+        "params": 512
+      }
+    ]
+  },
+  "vit": {
+    "usage_constraints": {
+      "batch_size": 8,
+      "target_latency_s": 0.2
+    },
+    "model_level": {
+      "input_shape": [3, 224, 224],
+      "precision": "fp16",
+      "total_params": 86500000,
+      "model_type": "vit",
+      "patch_size": 16,
+      "hidden_dim": 768,
+      "num_heads": 12,
+      "num_layers": 12
+    },
+    "layer_summary": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "output_shape": [null, 768, 14, 14],
+        "params": 590592
+      },
+      {
+        "name": "cls_head",
+        "type": "Dense",
+        "output_shape": [null, 1000],
+        "params": 769000
+      }
+    ]
+  },
+  "transformer_encoder": {
+    "usage_constraints": {
+      "batch_size": 4,
+      "target_latency_s": 0.25
+    },
+    "model_level": {
+      "sequence_length": 512,
+      "precision": "fp32",
+      "total_params": 110000000,
+      "model_type": "transformer_encoder",
+      "hidden_dim": 768,
+      "num_heads": 12,
+      "num_layers": 12
+    },
+    "layer_summary": [
+      {
+        "name": "self_attn_qkv",
+        "type": "Dense",
+        "output_shape": [null, 512, 768],
+        "params": 17783808
+      },
+      {
+        "name": "mlp_fc",
+        "type": "Dense",
+        "output_shape": [null, 512, 3072],
+        "params": 236011008
+      }
+    ]
+  },
+  "llm": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.3
+    },
+    "model_level": {
+      "context_length": 2048,
+      "precision": "bf16",
+      "total_params": 7000000000,
+      "model_type": "llm",
+      "hidden_dim": 4096,
+      "num_heads": 32,
+      "num_layers": 32,
+      "vocab_size": 32000
+    },
+    "layer_summary": [
+      {
+        "name": "attn_dense",
+        "type": "Dense",
+        "output_shape": [null, 4096],
+        "params": 16781312
+      },
+      {
+        "name": "mlp_act",
+        "type": "Activation",
+        "output_shape": [null, 4096],
+        "params": 0
+      }
+    ]
+  },
+  "mlp": {
+    "usage_constraints": {
+      "batch_size": 32,
+      "target_latency_s": 0.05
+    },
+    "model_level": {
+      "input_dim": 784,
+      "precision": "fp32",
+      "total_params": 535818,
+      "model_type": "mlp",
+      "hidden_layers": [512, 256],
+      "output_dim": 10
+    },
+    "layer_summary": [
+      {
+        "name": "dense1",
+        "type": "Dense",
+        "output_shape": [null, 512],
+        "params": 401920
+      },
+      {
+        "name": "dense2",
+        "type": "Dense",
+        "output_shape": [null, 256],
+        "params": 131328
+      },
+      {
+        "name": "logits",
+        "type": "Dense",
+        "output_shape": [null, 10],
+        "params": 2570
+      }
+    ]
+  },
+  "rnn": {
+    "usage_constraints": {
+      "batch_size": 16,
+      "target_latency_s": 0.1
+    },
+    "model_level": {
+      "input_dim": 128,
+      "precision": "fp32",
+      "total_params": 1200000,
+      "model_type": "rnn",
+      "hidden_dim": 256,
+      "num_layers": 2,
+      "bidirectional": true
+    },
+    "layer_summary": [
+      {
+        "name": "rnn_proj",
+        "type": "Dense",
+        "output_shape": [null, 256],
+        "params": 33024
+      },
+      {
+        "name": "rnn_output",
+        "type": "Dense",
+        "output_shape": [null, 256],
+        "params": 65792
+      }
+    ]
+  },
+  "gan": {
+    "usage_constraints": {
+      "batch_size": 8,
+      "target_latency_s": 0.2
+    },
+    "model_level": {
+      "latent_dim": 128,
+      "precision": "fp16",
+      "total_params": 40000000,
+      "model_type": "gan",
+      "generator_params": 20000000,
+      "discriminator_params": 20000000
+    },
+    "layer_summary": [
+      {
+        "name": "generator_dense",
+        "type": "Dense",
+        "output_shape": [null, 1024],
+        "params": 132096
+      },
+      {
+        "name": "discriminator_dense",
+        "type": "Dense",
+        "output_shape": [null, 1],
+        "params": 1025
+      }
+    ]
+  },
+  "diffusion": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.4
+    },
+    "model_level": {
+      "precision": "fp16",
+      "total_params": 800000000,
+      "model_type": "diffusion",
+      "num_resolutions": 4,
+      "unet_channels": [128, 256, 512, 512],
+      "num_steps": 50
+    },
+    "layer_summary": [
+      {
+        "name": "downsample_conv",
+        "type": "Conv2d",
+        "output_shape": [null, 128, 64, 64],
+        "params": 3584
+      },
+      {
+        "name": "bottleneck_conv",
+        "type": "Conv2d",
+        "output_shape": [null, 256, 32, 32],
+        "params": 295168
+      }
+    ]
+  }
 }
