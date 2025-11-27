@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import sys
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
@@ -14,6 +16,11 @@ from metadata_extractor.routers.hardware_router import router as crawler_router
 from .v1.endpoints import hardware, metadata, models
 
 logger = get_logger(__name__)
+
+# Ensure project src is on sys.path for direct execution/debugging
+SRC_ROOT = Path(__file__).resolve().parents[2]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.append(str(SRC_ROOT))
 
 
 @asynccontextmanager

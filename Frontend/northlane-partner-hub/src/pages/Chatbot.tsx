@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,8 +22,7 @@ type HardwareItem = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-const API_KEY = import.meta.env.VITE_API_KEY || import.meta.env.VITE_OPENAI_API_KEY;
-const OPENAI_MODEL = import.meta.env.VITE_OPENAI_MODEL || 'gpt-4o-mini';
+const METADATA_ENDPOINT = `${API_BASE_URL}/metadata/extract`;
 
 const numericValue = (value: unknown): number | null => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -109,7 +108,7 @@ const fetchGpuInventory = async (): Promise<HardwareItem[]> => {
   const response = await fetch(`${API_BASE_URL}/hardware`, {
     headers: {
       'Content-Type': 'application/json',
-      ...(API_KEY ? { Authorization: `Bearer ${API_KEY}`, 'x-api-key': API_KEY } : {}),
+      ...(false ? { Authorization: `Bearer ${null}`, 'x-api-key': null } : {}),
     },
   });
 
@@ -130,52 +129,53 @@ const pickBestGpuIndex = async (_gpus: HardwareItem[]): Promise<number> => {
 
 const getAssistantResponse = async (
   userPrompt: string,
-  chatHistory: ChatMessage[],
+  _chatHistory: ChatMessage[],
   recommendation: HardwareItem | null,
-): Promise<string> => {
-  if (!API_KEY) {
-    return 'I need an API key to answer questions. Please set VITE_OPENAI_API_KEY (or VITE_API_KEY) in your environment and reload.';
-  }
+  sessionId: string,
+  lastQuestion: string | null,
+): Promise<{ reply: string; nextQuestion: string | null }> => {
+  const payload = {
+    model_type: 'cnn',
+    session_id: sessionId,
+    user_input: userPrompt,
+    last_question: lastQuestion,
+    current_state: null,
+    reset: false,
+  };
 
-  const systemPrompt = [
-    'You are a concise hardware recommendation assistant.',
-    recommendation
-      ? `Current recommendation: ${recommendation.vendor} ${recommendation.model_name}. Specs: ${JSON.stringify(
-          recommendation.spec || {},
-        )}.`
-      : 'No GPU has been selected yet.',
-    'Answer questions clearly and reference the recommended GPU when helpful.',
-  ].join(' ');
+  // Debug: log outbound payload
+  // eslint-disable-next-line no-console
+  console.log('Sending metadata request:', payload);
 
-  const messagesPayload = [
-    { role: 'system', content: systemPrompt },
-    ...chatHistory.slice(-8).map((m) => ({ role: m.role, content: m.content })),
-    { role: 'user', content: userPrompt },
-  ];
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch(METADATA_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: messagesPayload,
-      temperature: 0.3,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to reach the chat service: ${errorText || response.statusText}`);
+    throw new Error(`Failed to reach the metadata service: ${errorText || response.statusText}`);
   }
 
   const data = await response.json();
-  const reply = data?.choices?.[0]?.message?.content;
-  return reply || 'I could not generate a response right now. Please try again.';
-};
+  // Debug: log inbound response
+  // eslint-disable-next-line no-console
+  console.log('Received metadata response:', data);
+  const metadata = data?.metadata ?? {};
+  const nextQuestion = data?.next_question ?? null;
 
+  if (nextQuestion) {
+    return { reply: nextQuestion, nextQuestion };
+  }
+
+  const recommendationLine = recommendation
+    ? `Current recommendation: ${recommendation.vendor} ${recommendation.model_name}.`
+    : 'No GPU has been selected yet.';
+  const summary = `Metadata extraction result:\n${JSON.stringify(metadata, null, 2)}\n${recommendationLine}`;
+  return { reply: summary, nextQuestion: null };
+};
+ 
 const Chatbot = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -187,6 +187,8 @@ const Chatbot = () => {
   const [powerLimit, setPowerLimit] = useState('');
   const [isEdgeDevice, setIsEdgeDevice] = useState(false);
   const [recommendation, setRecommendation] = useState<HardwareItem | null>(null);
+  const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const lastQuestionRef = useRef<string | null>(null);
 
   useEffect(() => {
     setMessages([
@@ -271,15 +273,22 @@ const Chatbot = () => {
   const handleSend = async () => {
     if (!message.trim()) return;
     const userMessage = message.trim();
-    const chatHistory = [...messages, { role: 'user', content: userMessage }];
+    const chatHistory: ChatMessage[] = [...messages, { role: 'user', content: userMessage }];
 
     setMessages(chatHistory);
     setMessage('');
     setLoading(true);
 
     try {
-      const reply = await getAssistantResponse(userMessage, messages, recommendation);
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+      const assistantMessage = await getAssistantResponse(
+        userMessage,
+        chatHistory,
+        recommendation,
+        sessionIdRef.current,
+        lastQuestionRef.current,
+      );
+      lastQuestionRef.current = assistantMessage.nextQuestion;
+      setMessages((prev) => [...prev, { role: 'assistant', content: assistantMessage.reply }]);
     } catch (error) {
       const description = error instanceof Error ? error.message : 'Please try again.';
       setMessages((prev) => [

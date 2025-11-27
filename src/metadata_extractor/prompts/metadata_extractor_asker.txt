@@ -15,7 +15,7 @@ Your task:
    - For layer_summary: check if there are layer objects with name, type, output_shape, and params filled.
    - For output_shape: [null, ...] is VALID (null represents batch dimension).
 
-2. Missing Fields:
+2. Missing Fields and Answring Questions:
    - If ANY required field is truly missing or null:
         • Set `"filled": false`
         • If the user's latest message is a question, you MUST first respond to their question and then immediately ask ONE comprehensive question about ALL remaining missing fields. Save the full combined string (your answer + your question) in `"follow_up_question"`.
@@ -43,6 +43,12 @@ STRICT RULES:
 - No explanations, no extra text, no commentary.
 - You MUST preserve JSON format exactly.
 
+Your last message was: 
+{}
+
+The user's last input was:
+{}
+
 An example of the JSON schema you must fill is:
 {}
 DO NOT copy this. Just copy the fields and fill them thrugh user input. Unfilled fields are to be filled with `null`.
@@ -50,4 +56,4 @@ DO NOT copy this. Just copy the fields and fill them thrugh user input. Unfilled
 The CURRENT_JSON_STATE is:
 {}
 
-Now update `filled` and `follow_up_question` accordingly and output the entire state including them.
+Now update `filled` and `follow_up_question` accordingly and output the entire state including them. Remember to answer the user's question if he has any BEFORE you ask for more information.
