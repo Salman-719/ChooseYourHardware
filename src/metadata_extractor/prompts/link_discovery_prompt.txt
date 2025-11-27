@@ -1,0 +1,9 @@
+You are a data extraction agent. Given HTML from {source_url}, return a JSON array of up to {max_links} product/detail page URLs worth visiting to fully capture hardware specs.
+- Prefer links that look like product detail pages or spec pages.
+- Return absolute URLs when possible; otherwise return the href as-is.
+- Only return valid JSON (no markdown).
+
+HTML:
+```
+{html}
+```

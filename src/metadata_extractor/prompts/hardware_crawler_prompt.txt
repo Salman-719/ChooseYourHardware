@@ -1,11 +1,42 @@
 You are a data extraction agent. Given HTML content from a trusted hardware catalog at {source_url},
-return a JSON array of hardware objects with fields:
-- name (required)
-- url (if present)
-- price (string, as seen)
-- source (set to the source URL)
+return a JSON array of hardware objects with this exact shape:
+- hardware_id: a stable, non-empty string identifier (e.g., slugified vendor + model + kind)
+- kind: one of ["cpu_node", "gpu", "tpu", "accelerator", "jetson", "soc"]
+- vendor: string
+- model_name: string
+- spec: object matching the kind-specific requirements below
+- url: product URL if present
+- price: REQUIRED if shown on the page (release price/MSRP or listed price, include currency). If no price is explicitly present in the HTML, set price to null (never invent or estimate).
+- source: set to the source URL
 
-Only return valid JSON (no markdown, no explanations).
+Spec requirements:
+- cpu_node:
+  - Required numbers: num_sockets, cores_per_socket, threads_per_core (ints >0)
+  - Required numbers: base_clock_ghz, vector_width_bits, fma_units_per_core (>0)
+  - Required memory: ram_capacity_gb (>0) AND (ram_bandwidth_gbps OR (memory_channels + memory_speed_mtps [+ optional memory_bus_width_bits]))
+  - Latencies: dram_latency_s or dram_latency_ns; cache_latency_s or cache_latency_ns (must supply)
+  - Optional: peak_fp32_tflops; l3_cache_mb or l3_cache_bytes
+  - Dtype flags supports_fp16/supports_bf16/supports_int8 ONLY if corresponding peak_fp16_tflops/peak_bf16_tflops/peak_int8_tops provided
+- gpu:
+  - Required numbers: vram_capacity_gb, vram_bandwidth_gbps. Use the numbers exactly as shown; do not fabricate. If not present, set to null.
+  - peak_fp32_tflops required OR provide num_sms + cores_per_sm + base_clock_ghz to infer. Use page values only. If no FP32 number is shown, set peak_fp32_tflops to null.
+  - Power: power_consumption_w (number, in watts) must come from the page (TDP/board/graphics power). If no wattage is present, set to null (do not invent).
+  - Latencies: dram_latency_ns (or _s) and cache_latency_ns (or _s). Prefer values shown on the page. If none are provided, leave as null, but only after confirming they are not present anywhere on the page.
+  - Optional: peak_fp16_tflops, peak_bf16_tflops, peak_int8_tops, nvlink_bandwidth_gbps, pcie_bandwidth_gbps if found please add
+  - Latencies: dram_latency_s or _ns; cache_latency_s or _ns (must supply)
+  - Dtype flags must align with peaks as above
+- accelerator/tpu:
+  - Require at least one of peak_fp32_tflops, peak_fp16_tflops, peak_bf16_tflops, peak_int8_tops
+  - memory_capacity_gb and memory_bandwidth_gbps required
+  - Optional: host_bandwidth_gbps
+  - Latencies: dram_latency_s/_ns and cache_latency_s/_ns required
+  - Dtype flags must align with peaks
+- jetson/soc:
+  - spec must include cpu (as cpu_node spec) and gpu (as gpu spec)
+  - ram_capacity_gb (shared)
+  - Latencies must be provided in cpu or gpu specs
+
+Return ONLY valid JSON (no markdown, no triple backticks, no extra text). Use the above keys exactly. Return at most 20 items.
 
 HTML:
 ```

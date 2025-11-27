@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from metadata_extractor.app.services.hardware_store import list_hardware
-from metadata_extractor.app.services.hardware_crawler import crawl_once
+from metadata_extractor.services.hardware_store import list_hardware
+from metadata_extractor.services.hardware_crawler import crawl_once
 
 router = APIRouter(
     prefix="/hardware",
