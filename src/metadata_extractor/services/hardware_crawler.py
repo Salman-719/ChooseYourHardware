@@ -145,7 +145,10 @@ async def _discover_links(feed_html: str, source_url: str, max_links: int = 10) 
         for raw in parsed if isinstance(parsed, list) else []:
             if not isinstance(raw, str):
                 continue
-            full = urljoin(source_url, raw.strip())
+            cleaned = raw.strip()
+            if not cleaned.startswith("http"):
+                cleaned = "/" + cleaned.lstrip("/")  # ensure single leading slash for urljoin
+            full = urljoin(source_url, cleaned)
             if full and full not in links:
                 links.append(full)
     except json.JSONDecodeError:
@@ -162,10 +165,13 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
     """
     Ask the model to pull structured hardware items out of the HTML feed using the shared prompt.
     """
+    html_slice = feed_html[:120000]
     prompt = HARDWARE_CRAWLER_PROMPT.format(
         source_url=source_url,
-        html=feed_html[:120000],
+        html=html_slice,
     )
+    logger.info("LLM extract prompt_len=%s feed_len=%s", len(prompt), len(feed_html))
+
     response = client.responses.create(
         model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
         input=prompt,
@@ -174,7 +180,9 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
         logger.warning("LLM returned empty output for hardware extraction")
         return []
 
-    raw_text = _clean_json_text(response.output_text or "")
+    raw_output = response.output_text or ""
+    logger.info("LLM extract raw_output_len=%s", len(raw_output))
+    raw_text = _clean_json_text(raw_output)
     try:
         parsed = json.loads(raw_text)
     except json.JSONDecodeError:
@@ -263,7 +271,9 @@ async def crawl_once() -> int:
             try:
                 await asyncio.sleep(1.0)
                 detail_html += f"\n\n<!-- PAGE {link} -->\n"
-                detail_html += await _fetch_page(link)
+                page = await _fetch_page(link)
+                detail_html += page
+                logger.info("Fetched detail page %s (chars=%s)", link, len(page))
             except Exception as exc:  # noqa: BLE001
                 logger.debug("Failed to fetch detail page %s: %s", link, exc)
                 continue
