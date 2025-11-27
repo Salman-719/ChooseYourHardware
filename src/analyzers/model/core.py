@@ -115,6 +115,11 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
         result.setdefault("activation_sum_bytes", act_bytes)
         result.setdefault("activation_peak_bytes", act_bytes)
         result["activation_memory_bytes"] = result.get("activation_memory_bytes", act_bytes)
+    # Optional XLA flag for TPU-compiled models
+    is_xla = raw.get("is_XLA", False)
+    if not isinstance(is_xla, bool):
+        raise ValidationError("is_XLA must be a boolean when provided.")
+    result["is_XLA"] = is_xla
     return result
 
 
@@ -129,6 +134,7 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
     """Handle metadata-extractor style payloads that include usage/model/layers."""
     model_level = require_dict(raw.get("model_level"), "model_level")
     model_type = model_level.get("model_type")
+    is_xla = _get_bool_with_default(model_level, "is_XLA", False)
     if model_type in {"transformer", "transformer_encoder"}:
         result = _analyze_transformer_from_metadata(raw)
         scenario_kind = "full_sequence"
@@ -145,6 +151,7 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
         scenario_kind,
     )
     result["inference_scenario"] = scenario
+    result["is_XLA"] = is_xla
     return result
 
 
