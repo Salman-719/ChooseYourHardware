@@ -14,7 +14,7 @@ ValidationError = ValueError
 ALLOWED_KINDS = {"cpu_node", "gpu", "tpu", "accelerator", "jetson", "soc"}
 
 
-def _analyze_single_hardware(hardware: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]:
+def _analyze_single_hardware(hardware: Dict[str, Any]) -> Dict[str, Any]:
     hardware_id = hardware.get("hardware_id")
     if not hardware_id or not isinstance(hardware_id, str):
         raise ValidationError("hardware_id must be a non-empty string.")
@@ -30,13 +30,13 @@ def _analyze_single_hardware(hardware: Dict[str, Any], utils: Dict[str, float]) 
         raise ValidationError("spec must be an object.")
 
     if kind == "cpu_node":
-        normalized = analyzers.analyze_cpu_node(spec, utils)
+        normalized = analyzers.analyze_cpu_node(spec, resolve_utils(spec))
     elif kind == "gpu":
-        normalized = analyzers.analyze_gpu(spec, utils)
+        normalized = analyzers.analyze_gpu(spec, resolve_utils(spec))
     elif kind in {"tpu", "accelerator"}:
-        normalized = analyzers.analyze_accelerator(spec, utils)
+        normalized = analyzers.analyze_accelerator(spec, resolve_utils(spec))
     elif kind in {"jetson", "soc"}:
-        normalized = analyzers.analyze_jetson(spec, utils)
+        normalized = analyzers.analyze_jetson(spec, resolve_utils(spec))
     else:
         raise ValidationError(f"Unhandled kind '{kind}'.")
 
@@ -55,13 +55,11 @@ def analyze_hardware_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     if "hardware_list" not in spec or not isinstance(spec["hardware_list"], list) or not spec["hardware_list"]:
         raise ValidationError("hardware_list must be a non-empty list.")
 
-    utils = resolve_utils(spec.get("defaults"))
-
     analyses: List[Dict[str, Any]] = []
     for hw in spec["hardware_list"]:
         if not isinstance(hw, dict):
             raise ValidationError("Each hardware entry must be an object.")
-        analyses.append(_analyze_single_hardware(hw, utils))
+        analyses.append(_analyze_single_hardware(hw))
 
     return {"hardware_analysis": analyses}
 

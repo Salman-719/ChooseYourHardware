@@ -16,9 +16,15 @@ def analyze_llm_decoder(
     dtype_bytes: int,
     batch_size: int,
     seq_length: int,
-    llm_metadata: Dict[str, Any],
+    llm_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    llm_cfg = require_dict(config.get("llm_config"), "llm_config") if config.get("llm_config") else llm_metadata
+    llm_cfg_raw = config.get("llm_config")
+    if llm_cfg_raw is not None:
+        llm_cfg = require_dict(llm_cfg_raw, "llm_config")
+    elif llm_metadata is not None:
+        llm_cfg = require_dict(llm_metadata, "llm_metadata")
+    else:
+        raise ValidationError("llm_decoder requires llm_config or llm_metadata.")
     num_layers = require_int(llm_cfg, "num_layers", positive=True)
     hidden_size = require_int(llm_cfg, "hidden_size", positive=True)
     ffn_size = require_int(llm_cfg, "ffn_size", positive=True)
