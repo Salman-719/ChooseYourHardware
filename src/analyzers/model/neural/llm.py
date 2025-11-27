@@ -11,28 +11,45 @@ ValidationError = ValueError
 
 
 def analyze_llm_decoder(
-    config: Dict[str, Any],
+    config: Dict[str, Any] | None,
     dtype_bits: int,
     dtype_bytes: int,
     batch_size: int,
     seq_length: int,
     llm_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    llm_cfg_raw = config.get("llm_config")
-    if llm_cfg_raw is not None:
-        llm_cfg = require_dict(llm_cfg_raw, "llm_config")
-    elif llm_metadata is not None:
-        llm_cfg = require_dict(llm_metadata, "llm_metadata")
-    else:
-        raise ValidationError("llm_decoder requires llm_config or llm_metadata.")
-    num_layers = require_int(llm_cfg, "num_layers", positive=True)
-    hidden_size = require_int(llm_cfg, "hidden_size", positive=True)
-    ffn_size = require_int(llm_cfg, "ffn_size", positive=True)
-    num_heads = require_int(llm_cfg, "num_heads", positive=True)
+    # Prefer explicit metadata; fall back to llm_config/model_level within config.
+    llm_cfg_raw = None
+    if llm_metadata is not None:
+        llm_cfg_raw = llm_metadata
+    elif config is not None:
+        llm_cfg_raw = config.get("llm_config") or config.get("model_level")
+
+    if llm_cfg_raw is None:
+        raise ValidationError("llm_decoder requires llm_metadata or llm_config/model_level.")
+
+    llm_cfg = require_dict(llm_cfg_raw, "llm_metadata")
+
+    def _require_int_fallback(cfg: Dict[str, Any], primary: str, fallback: str | None = None) -> int:
+        if primary in cfg:
+            return require_int(cfg, primary, positive=True)
+        if fallback and fallback in cfg:
+            return require_int(cfg, fallback, positive=True)
+        raise ValidationError(f"Missing required field: {primary}" + (f" or {fallback}" if fallback else ""))
+
+    num_layers = _require_int_fallback(llm_cfg, "num_layers")
+    hidden_size = _require_int_fallback(llm_cfg, "hidden_size", "hidden_dim")
+    ffn_size = _require_int_fallback(llm_cfg, "ffn_size")
+    num_heads = _require_int_fallback(llm_cfg, "num_heads")
     if hidden_size % num_heads != 0:
         raise ValidationError("hidden_size must be divisible by num_heads.")
-    vocab_size = require_int(llm_cfg, "vocab_size", positive=True)
-    max_seq_len = require_int(llm_cfg, "max_context_tokens", positive=True)
+    vocab_size = _require_int_fallback(llm_cfg, "vocab_size")
+    if "max_context_tokens" in llm_cfg:
+        max_seq_len = require_int(llm_cfg, "max_context_tokens", positive=True)
+    elif "max_sequence_length" in llm_cfg:
+        max_seq_len = require_int(llm_cfg, "max_sequence_length", positive=True)
+    else:
+        raise ValidationError("llm_decoder must specify max_context_tokens or max_sequence_length.")
     use_bias = require_bool(llm_cfg, "use_bias") if "use_bias" in llm_cfg else False
     use_layernorm = require_bool(llm_cfg, "use_layernorm") if "use_layernorm" in llm_cfg else True
     include_embeddings = require_bool(llm_cfg, "include_embeddings") if "include_embeddings" in llm_cfg else True

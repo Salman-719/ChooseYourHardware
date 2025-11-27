@@ -1,0 +1,18 @@
+{
+  "hardware_id": "amd-radeon-rx-9090-xt-gpu",
+  "kind": "gpu",
+  "vendor": "AMD",
+  "model_name": "Radeon RX 9090 XT",
+  "spec": {
+    "vram_capacity_gb": 20,
+    "vram_bandwidth_gbps": 768.0,
+    "peak_fp32_tflops": 65.0,
+    "power_consumption_w": 350,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://www.techpowerup.com/gpu-specs/",
+  "price": "799 USD",
+  "source": "https://www.techpowerup.com/gpu-specs/",
+  "discovered_at": "2025-11-27 04:44:22"
+}

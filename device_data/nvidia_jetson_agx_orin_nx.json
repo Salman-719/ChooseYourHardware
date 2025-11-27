@@ -1,0 +1,40 @@
+{
+  "hardware_id": "nvidia-jetson-agx-orin-nx",
+  "kind": "jetson",
+  "vendor": "NVIDIA",
+  "model_name": "Jetson AGX Orin NX",
+  "spec": {
+    "ram_capacity_gb": 32,
+    "ram_bandwidth_gbps": 102.4,
+    "cpu": {
+      "num_sockets": 1,
+      "cores_per_socket": 8,
+      "threads_per_core": 1,
+      "base_clock_ghz": 1.8,
+      "vector_width_bits": 128,
+      "fma_units_per_core": 2,
+      "ram_capacity_gb": 32,
+      "ram_bandwidth_gbps": 102.4,
+      "dram_latency_ns": 120.0,
+      "cache_latency_ns": 6.0
+    },
+    "gpu": {
+      "peak_fp32_tflops": 3.3,
+      "peak_fp16_tflops": 6.6,
+      "peak_int8_tops": 13.0,
+      "vram_capacity_gb": 0.001,
+      "vram_bandwidth_gbps": 102.4,
+      "supports_fp16": true,
+      "supports_bf16": false,
+      "supports_int8": true,
+      "nvlink_bandwidth_gbps": null,
+      "pcie_bandwidth_gbps": null,
+      "dram_latency_ns": 120.0,
+      "cache_latency_ns": 6.0
+    }
+  },
+  "url": "https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-agx-orin/",
+  "price": "1499 USD",
+  "source": "https://www.nvidia.com/",
+  "discovered_at": "2025-11-27 04:44:22"
+}

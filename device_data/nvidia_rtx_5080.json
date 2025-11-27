@@ -1,0 +1,18 @@
+{
+  "hardware_id": "nvidia-rtx-5080-gpu",
+  "kind": "gpu",
+  "vendor": "NVIDIA",
+  "model_name": "RTX 5080",
+  "spec": {
+    "vram_capacity_gb": 20,
+    "vram_bandwidth_gbps": 864.0,
+    "peak_fp32_tflops": 60.0,
+    "power_consumption_w": 350,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://www.nvidia.com/en-us/geforce/",
+  "price": "1199 USD",
+  "source": "https://www.nvidia.com/",
+  "discovered_at": "2025-11-27 04:44:22"
+}

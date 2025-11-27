@@ -126,7 +126,7 @@ def analyze_neural_summary(nn_root: Dict[str, Any]) -> Dict[str, Any]:
             _ensure_param_match(layer, params, inferred_params, idx)
         else:
             # Unknown layers must provide explicit FLOPs to avoid silent underestimation.
-            explicit_flops = layer.get("flops")
+            explicit_flops = layer.get("flops", 0)
             if not isinstance(explicit_flops, (int, float)) or explicit_flops < 0:
                 raise ValidationError(
                     f"layer_summary[{idx}] has unknown type '{layer_type_raw}' and must include non-negative 'flops'."
@@ -281,7 +281,10 @@ def _conv_flops_and_params(
 def _dense_flops_and_params(
     layer: Dict[str, Any], in_shape: Sequence[int | None], out_shape: Sequence[int | None]
 ) -> Tuple[int, int]:
-    in_features = shape_elements(in_shape, allow_none_leading=True)
+    # Dense layers operate per-example; ignore batch dimension when computing input features.
+    if len(in_shape) < 2:
+        raise ValidationError("Dense layer input_shape must include batch and feature dimensions.")
+    in_features = shape_elements(in_shape[1:], allow_none_leading=False)
     if not out_shape or not isinstance(out_shape[-1], int):
         raise ValidationError("Dense layer output_shape must end with an integer units dimension.")
     units = out_shape[-1]

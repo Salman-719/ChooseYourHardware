@@ -23,6 +23,8 @@ type HardwareItem = {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 const METADATA_ENDPOINT = `${API_BASE_URL}/metadata/extract`;
+const MATCHER_ENDPOINT = `${API_BASE_URL}/matcher/best`;
+const DEVICE_DIR = import.meta.env.VITE_DEVICE_DIR || undefined;
 
 const numericValue = (value: unknown): number | null => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -133,7 +135,7 @@ const getAssistantResponse = async (
   recommendation: HardwareItem | null,
   sessionId: string,
   lastQuestion: string | null,
-): Promise<{ reply: string; nextQuestion: string | null }> => {
+): Promise<{ reply: string; nextQuestion: string | null; metadata?: Record<string, unknown> }> => {
   const payload = {
     model_type: 'cnn',
     session_id: sessionId,
@@ -164,16 +166,17 @@ const getAssistantResponse = async (
   console.log('Received metadata response:', data);
   const metadata = data?.metadata ?? {};
   const nextQuestion = data?.next_question ?? null;
+  const isComplete = data?.is_complete ?? false;
 
   if (nextQuestion) {
-    return { reply: nextQuestion, nextQuestion };
+    return { reply: nextQuestion, nextQuestion, metadata };
   }
 
   const recommendationLine = recommendation
     ? `Current recommendation: ${recommendation.vendor} ${recommendation.model_name}.`
     : 'No GPU has been selected yet.';
   const summary = `Metadata extraction result:\n${JSON.stringify(metadata, null, 2)}\n${recommendationLine}`;
-  return { reply: summary, nextQuestion: null };
+  return { reply: summary, nextQuestion: null, metadata: isComplete ? metadata : undefined };
 };
  
 const Chatbot = () => {
@@ -189,6 +192,9 @@ const Chatbot = () => {
   const [recommendation, setRecommendation] = useState<HardwareItem | null>(null);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const lastQuestionRef = useRef<string | null>(null);
+  const [modelMetadata, setModelMetadata] = useState<Record<string, unknown> | null>(null);
+  const [matcherResult, setMatcherResult] = useState<string | null>(null);
+  const [matcherLoading, setMatcherLoading] = useState(false);
 
   useEffect(() => {
     setMessages([
@@ -288,6 +294,41 @@ const Chatbot = () => {
         lastQuestionRef.current,
       );
       lastQuestionRef.current = assistantMessage.nextQuestion;
+      if (assistantMessage.metadata) {
+        setModelMetadata(assistantMessage.metadata);
+        // Call matcher when extraction is complete
+        try {
+          setMatcherLoading(true);
+          // eslint-disable-next-line no-console
+          console.log('Calling matcher with metadata:', assistantMessage.metadata);
+          const matchResponse = await fetch(MATCHER_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: assistantMessage.metadata,
+              device_dir: DEVICE_DIR,
+            }),
+          });
+          if (!matchResponse.ok) {
+            const errText = await matchResponse.text();
+            // eslint-disable-next-line no-console
+            console.error('Matcher error response:', errText || matchResponse.statusText);
+            setMatcherResult(`Matcher error: ${errText || matchResponse.statusText}`);
+          } else {
+            const matchData = await matchResponse.json();
+            // eslint-disable-next-line no-console
+            console.log('Matcher success response:', matchData);
+            setMatcherResult(JSON.stringify(matchData, null, 2));
+          }
+        } catch (err) {
+          const desc = err instanceof Error ? err.message : String(err);
+          // eslint-disable-next-line no-console
+          console.error('Matcher request failed:', desc);
+          setMatcherResult(`Matcher request failed: ${desc}`);
+        } finally {
+          setMatcherLoading(false);
+        }
+      }
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantMessage.reply }]);
     } catch (error) {
       const description = error instanceof Error ? error.message : 'Please try again.';
@@ -394,7 +435,16 @@ const Chatbot = () => {
             {(loading || finding) && (
               <Card className="p-6 bg-card border-2 mr-auto max-w-[80%]">
                 <div className="text-sm font-medium mb-2">Assistant</div>
-                <div className="text-muted-foreground">Analyzing...</div>
+                <div className="text-muted-foreground">
+                  {matcherLoading ? 'Matching best device...' : 'Analyzing...'}
+                </div>
+              </Card>
+            )}
+
+            {matcherResult && (
+              <Card className="p-6 bg-card/80 backdrop-blur-sm border-2">
+                <div className="text-sm font-medium mb-2">Matcher Result</div>
+                <pre className="text-xs whitespace-pre-wrap break-words">{matcherResult}</pre>
               </Card>
             )}
           </div>

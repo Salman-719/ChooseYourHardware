@@ -120,11 +120,15 @@ def _passes_hard_constraints(model: Dict[str, Any], hardware: Dict[str, Any]) ->
     )
 
     if max_cost is not None and hw_cost is not None and hw_cost > max_cost:
+        print(f"Skipping device due to cost: {hw_cost} > budget {max_cost}")
         return False
     if max_power is not None and hw_power is not None and hw_power > max_power:
+        print(f"Skipping device due to cost:  POWER")
         return False
     if requires_xla and not supports_xla:
-        return False
+
+        print(f"Skipping device due to cost: XLA")
+        return True
     return True
 
 
@@ -143,10 +147,12 @@ def calculate_inference_metrics(
     """Return (estimated_latency_seconds, bottleneck_label) or (inf, 'UNSUPPORTED') if infeasible."""
     try:
         if not _passes_hard_constraints(model, hardware):
+            print("Matcher: hard constraints failed (cost/power/XLA).")
             return float("inf"), "UNSUPPORTED"
 
         dtype = _choose_dtype(model, hardware)
         if dtype is None:
+            print("Matcher: dtype not supported on hardware.")
             return float("inf"), "UNSUPPORTED"
 
         flops = _scenario_flops(model, decode_tokens=decode_tokens)
@@ -160,10 +166,12 @@ def calculate_inference_metrics(
         # Prefer sustained numbers; fall back to peak if utilization was omitted.
         base_perf = perf_map.get(dtype) or peak_map.get(dtype)
         if not base_perf or base_perf <= 0:
+            print("Matcher: missing sustained/peak perf for dtype", dtype)
             return float("inf"), "UNSUPPORTED"
 
         feasible_mem, stream_bytes, bw = _memory_profile(model, hardware)
         if not feasible_mem:
+            print("Matcher: out of memory for working set.")
             return float("inf"), "OUT_OF_MEMORY"
         t_bw = stream_bytes / bw if bw and stream_bytes else 0.0
 
@@ -176,5 +184,6 @@ def calculate_inference_metrics(
         parts = {"COMPUTE": t_compute_peak, "MEMORY_BANDWIDTH": t_bw, "MEMORY_LATENCY": t_lat}
         bottleneck = max(parts.items(), key=lambda kv: kv[1])[0]
         return t_total, bottleneck
-    except Exception:
+    except Exception as exc:
+        print("Matcher: exception during metrics calculation:", exc)
         return float("inf"), "UNSUPPORTED"
