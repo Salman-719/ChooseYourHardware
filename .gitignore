@@ -5,3 +5,5 @@ __pycache__/
 *.py[cod]
 *.pyo
 .DS_Store
+Frontend/northlane-partner-hub/node_modules
+Frontend/northlane-partner-hub/.env.local
