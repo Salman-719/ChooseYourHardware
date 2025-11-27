@@ -204,6 +204,7 @@ class MetadataExtractor:
                 raise ValueError("OPENAI_API_KEY is required for metadata extraction.")
 
             print("n\\\n\n\n\n\nfetna5\n\n\n\n\n")
+            print(f"n\\\n\n{formatted_prompt}\n\n\n\n\n\n\n")
             response = await self.client.chat.completions.create(
                 model=self.model,
                 # Use system role to enforce answering user question before asking follow-ups

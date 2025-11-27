@@ -1,0 +1,18 @@
+{
+  "hardware_id": "amd-instinct-mi300x-gpu",
+  "kind": "gpu",
+  "vendor": "AMD",
+  "model_name": "Instinct MI300X",
+  "spec": {
+    "vram_capacity_gb": 192,
+    "vram_bandwidth_gbps": 5000.0,
+    "peak_fp32_tflops": 120.0,
+    "power_consumption_w": 750,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html",
+  "price": "35000 USD",
+  "source": "https://www.amd.com/",
+  "discovered_at": "2025-11-27 04:44:22"
+}

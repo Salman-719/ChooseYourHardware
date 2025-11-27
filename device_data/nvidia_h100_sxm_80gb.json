@@ -1,0 +1,18 @@
+{
+  "hardware_id": "nvidia-h100-sxm-80gb-gpu",
+  "kind": "gpu",
+  "vendor": "NVIDIA",
+  "model_name": "H100 SXM 80GB",
+  "spec": {
+    "vram_capacity_gb": 80,
+    "vram_bandwidth_gbps": 3000.0,
+    "peak_fp32_tflops": 60.0,
+    "power_consumption_w": 700,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://www.nvidia.com/en-us/data-center/h100/",
+  "price": "30000 USD",
+  "source": "https://www.nvidia.com/",
+  "discovered_at": "2025-11-27 04:44:22"
+}

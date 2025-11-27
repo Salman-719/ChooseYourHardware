@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
 from utils.logging import get_logger, setup_logging
 from metadata_extractor.routers.hardware_router import router as crawler_router
-from .v1.endpoints import hardware, metadata, models
+from .v1.endpoints import hardware, matcher, metadata, models
 
 logger = get_logger(__name__)
 
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(models.router, prefix="/api/v1", tags=["models"])
     app.include_router(hardware.router, prefix="/api/v1", tags=["hardware"])
     app.include_router(metadata.router, prefix="/api/v1")
+    app.include_router(matcher.router, prefix="/api/v1", tags=["matcher"])
     app.include_router(crawler_router, prefix="/api/v1", tags=["hardware-crawler"])
 
     @app.get("/health")

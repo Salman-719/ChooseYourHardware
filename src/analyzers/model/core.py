@@ -102,7 +102,8 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     elif model_type == "llm_decoder":
         if seq_length is None:
             raise ValidationError("sequence_length is required for llm_decoder models.")
-        result = llm.analyze_llm_decoder(raw, dtype_bits, dtype_bytes, batch_size, seq_length)
+        meta = raw.get("llm_config") or raw.get("model_level") or raw.get("llm_metadata")
+        result = llm.analyze_llm_decoder(None, dtype_bits, dtype_bytes, batch_size, seq_length, llm_metadata=meta)
         scenario_kind = "full_sequence+decode"
     else:
         raise ValidationError(f"Unhandled model_type '{model_type}'.")
@@ -276,25 +277,20 @@ def _analyze_llm_from_metadata(raw: Dict[str, Any]) -> Dict[str, Any]:
     include_pos_embeddings = _get_bool_with_default(model_level, "include_positional_embeddings", True)
     include_kv_cache = _get_bool_with_default(model_level, "include_kv_cache", True)
 
-    config = {
-        "model_type": "llm_decoder",
-        "precision": precision,
-        "inference_config": {"batch_size": batch_size, "sequence_length": seq_length},
-        "llm_config": {
-            "num_layers": num_layers,
-            "hidden_size": hidden,
-            "ffn_size": ffn_size,
-            "num_heads": num_heads,
-            "vocab_size": vocab_size,
-            "max_sequence_length": max_seq_len,
-            "use_bias": use_bias,
-            "use_layernorm": use_layernorm,
-            "include_embeddings": include_embeddings,
-            "include_positional_embeddings": include_pos_embeddings,
-            "include_kv_cache": include_kv_cache,
-        },
+    llm_metadata = {
+        "num_layers": num_layers,
+        "hidden_size": hidden,
+        "ffn_size": ffn_size,
+        "num_heads": num_heads,
+        "vocab_size": vocab_size,
+        "max_sequence_length": max_seq_len,
+        "use_bias": use_bias,
+        "use_layernorm": use_layernorm,
+        "include_embeddings": include_embeddings,
+        "include_positional_embeddings": include_pos_embeddings,
+        "include_kv_cache": include_kv_cache,
     }
-    return llm.analyze_llm_decoder(config, dtype_bits, dtype_bytes, batch_size, seq_length)
+    return llm.analyze_llm_decoder(None, dtype_bits, dtype_bytes, batch_size, seq_length, llm_metadata=llm_metadata)
 
 
 def _get_bool_with_default(obj: Dict[str, Any], key: str, default: bool) -> bool:

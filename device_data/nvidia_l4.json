@@ -1,0 +1,18 @@
+{
+  "hardware_id": "nvidia-l4-gpu",
+  "kind": "gpu",
+  "vendor": "NVIDIA",
+  "model_name": "L4",
+  "spec": {
+    "vram_capacity_gb": 24,
+    "vram_bandwidth_gbps": 300.0,
+    "peak_fp32_tflops": 30.0,
+    "power_consumption_w": 72,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://www.nvidia.com/en-us/data-center/l4/",
+  "price": "1499 USD",
+  "source": "https://www.nvidia.com/",
+  "discovered_at": "2025-11-27 04:44:22"
+}

@@ -57,3 +57,4 @@ The CURRENT_JSON_STATE is:
 {}
 
 Now update `filled` and `follow_up_question` accordingly and output the entire state including them. Remember to answer the user's question if he has any BEFORE you ask for more information.
+Also, remember to set filled to true if all information in the JSON are filled.
