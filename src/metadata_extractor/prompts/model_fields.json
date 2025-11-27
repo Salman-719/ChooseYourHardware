@@ -2,7 +2,9 @@
   "cnn": {
     "usage_constraints": {
       "batch_size": 4,
-      "target_latency_s": 0.1
+      "target_latency_s": 0.1,
+      "max_cost_usd": 2.5,
+      "max_power_w": 250
     },
     "model_level": {
       "input_shape": [3, 224, 224],
@@ -32,7 +34,9 @@
   "unet": {
     "usage_constraints": {
       "batch_size": 2,
-      "target_latency_s": 0.15
+      "target_latency_s": 0.15,
+      "max_cost_usd": 3.0,
+      "max_power_w": 300
     },
     "model_level": {
       "input_shape": [3, 256, 256],
@@ -68,7 +72,9 @@
   "fpn": {
     "usage_constraints": {
       "batch_size": 2,
-      "target_latency_s": 0.12
+      "target_latency_s": 0.12,
+      "max_cost_usd": 3.5,
+      "max_power_w": 350
     },
     "model_level": {
       "input_shape": [3, 224, 224],
@@ -97,7 +103,9 @@
   "vit": {
     "usage_constraints": {
       "batch_size": 8,
-      "target_latency_s": 0.2
+      "target_latency_s": 0.2,
+      "max_cost_usd": 4.0,
+      "max_power_w": 300
     },
     "model_level": {
       "input_shape": [3, 224, 224],
@@ -128,7 +136,9 @@
   "transformer_encoder": {
     "usage_constraints": {
       "batch_size": 4,
-      "target_latency_s": 0.25
+      "target_latency_s": 0.25,
+      "max_cost_usd": 5.0,
+      "max_power_w": 400
     },
     "model_level": {
       "input_shape": [512, 768],
@@ -166,7 +176,9 @@
   "llm": {
     "usage_constraints": {
       "batch_size": 1,
-      "target_latency_s": 0.3
+      "target_latency_s": 0.3,
+      "max_cost_usd": 7.0,
+      "max_power_w": 450
     },
     "model_level": {
       "context_length": 2048,
@@ -204,7 +216,9 @@
   "mlp": {
     "usage_constraints": {
       "batch_size": 32,
-      "target_latency_s": 0.05
+      "target_latency_s": 0.05,
+      "max_cost_usd": 1.0,
+      "max_power_w": 200
     },
     "model_level": {
       "input_dim": 784,
@@ -240,7 +254,9 @@
   "rnn": {
     "usage_constraints": {
       "batch_size": 16,
-      "target_latency_s": 0.1
+      "target_latency_s": 0.1,
+      "max_cost_usd": 1.5,
+      "max_power_w": 220
     },
     "model_level": {
       "input_dim": 128,
@@ -271,7 +287,9 @@
   "gan": {
     "usage_constraints": {
       "batch_size": 8,
-      "target_latency_s": 0.2
+      "target_latency_s": 0.2,
+      "max_cost_usd": 2.0,
+      "max_power_w": 250
     },
     "model_level": {
       "latent_dim": 128,
@@ -301,7 +319,9 @@
   "diffusion": {
     "usage_constraints": {
       "batch_size": 1,
-      "target_latency_s": 0.4
+      "target_latency_s": 0.4,
+      "max_cost_usd": 6.0,
+      "max_power_w": 500
     },
     "model_level": {
       "input_shape": [3, 256, 256],
@@ -329,8 +349,15 @@
     ]
   },
   "knn": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.4,
+      "max_cost_usd": 6.0,
+      "max_power_w": 500
+    },
     "model_type": "knn",
     "precision": "fp32",
+    "is_XLA": false,
     "inference_config": {
       "batch_size": 4
     },
@@ -344,8 +371,15 @@
     }
   },
   "kmeans": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.4,
+      "max_cost_usd": 6.0,
+      "max_power_w": 500
+    },
     "model_type": "kmeans",
     "precision": "fp32",
+    "is_XLA": false,
     "inference_config": {
       "batch_size": 4
     },
@@ -360,8 +394,15 @@
     }
   },
   "tree": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.4,
+      "max_cost_usd": 6.0,
+      "max_power_w": 500
+    },
     "model_type": "tree",
     "precision": "fp32",
+    "is_XLA": false,
     "inference_config": {
       "batch_size": 4
     },
@@ -374,8 +415,15 @@
     }
   },
   "random_forest": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.4,
+      "max_cost_usd": 6.0,
+      "max_power_w": 500
+    },
     "model_type": "random_forest",
     "precision": "fp32",
+    "is_XLA": false,
     "inference_config": {
       "batch_size": 4
     },
@@ -391,8 +439,15 @@
     }
   },
   "gradient_boosted_trees": {
+    "usage_constraints": {
+      "batch_size": 1,
+      "target_latency_s": 0.4,
+      "max_cost_usd": 6.0,
+      "max_power_w": 500
+    },
     "model_type": "gradient_boosted_trees",
     "precision": "fp32",
+    "is_XLA": false,
     "inference_config": {
       "batch_size": 4
     },

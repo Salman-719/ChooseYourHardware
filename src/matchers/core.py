@@ -104,6 +104,30 @@ def _latency_overhead(model: Dict[str, Any], hardware: Dict[str, Any]) -> float:
     return float(dram_lat)
 
 
+def _passes_hard_constraints(model: Dict[str, Any], hardware: Dict[str, Any]) -> bool:
+    """Filter out devices that violate hard constraints like cost, power, or XLA support."""
+    usage = model.get("usage_constraints", {})
+    max_cost = usage.get("max_cost_usd") or model.get("max_cost_usd")
+    max_power = usage.get("max_power_w") or model.get("max_power_w")
+    requires_xla = bool(model.get("is_XLA", False))
+
+    hw_cost = hardware.get("cost_usd") or hardware.get("normalized", {}).get("cost_usd")
+    hw_power = hardware.get("power_w") or hardware.get("normalized", {}).get("power_w")
+    supports_xla = (
+        hardware.get("supports_xla")
+        or hardware.get("normalized", {}).get("supports_xla")
+        or hardware.get("kind") == "tpu"
+    )
+
+    if max_cost is not None and hw_cost is not None and hw_cost > max_cost:
+        return False
+    if max_power is not None and hw_power is not None and hw_power > max_power:
+        return False
+    if requires_xla and not supports_xla:
+        return False
+    return True
+
+
 def estimate_latency(model: Dict[str, Any], hardware: Dict[str, Any], *, decode_tokens: Optional[int] = None) -> float:
     """Estimate end-to-end latency (seconds) by selecting the dominant bottleneck."""
     latency, _ = calculate_inference_metrics(model, hardware, decode_tokens=decode_tokens)
@@ -118,6 +142,9 @@ def calculate_inference_metrics(
 ) -> Tuple[float, str]:
     """Return (estimated_latency_seconds, bottleneck_label) or (inf, 'UNSUPPORTED') if infeasible."""
     try:
+        if not _passes_hard_constraints(model, hardware):
+            return float("inf"), "UNSUPPORTED"
+
         dtype = _choose_dtype(model, hardware)
         if dtype is None:
             return float("inf"), "UNSUPPORTED"

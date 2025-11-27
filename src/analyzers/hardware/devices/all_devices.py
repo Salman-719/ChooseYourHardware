@@ -132,6 +132,8 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": l3_cache_bytes,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
 
 
@@ -199,6 +201,8 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": None,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
 
 
@@ -257,6 +261,8 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": None,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
 
 
@@ -333,4 +339,6 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": l3_cache_bytes,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }

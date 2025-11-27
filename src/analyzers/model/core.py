@@ -120,6 +120,23 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(is_xla, bool):
         raise ValidationError("is_XLA must be a boolean when provided.")
     result["is_XLA"] = is_xla
+
+    # Optional cost and power constraints
+    max_cost = raw.get("max_cost_usd")
+    if max_cost is not None and (not isinstance(max_cost, (int, float)) or max_cost <= 0):
+        raise ValidationError("max_cost_usd must be a positive number when provided.")
+    max_power = raw.get("max_power_w")
+    if max_power is not None and (not isinstance(max_power, (int, float)) or max_power <= 0):
+        raise ValidationError("max_power_w must be a positive number when provided.")
+    # result["max_cost_usd"] = max_cost
+    # result["max_power_w"] = max_power
+
+    # Expose usage constraints for downstream matcher
+    result["usage_constraints"] = {
+        "batch_size": batch_size,
+        "max_cost_usd": max_cost,
+        "max_power_w": max_power,
+    }
     return result
 
 
@@ -135,6 +152,13 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
     model_level = require_dict(raw.get("model_level"), "model_level")
     model_type = model_level.get("model_type")
     is_xla = _get_bool_with_default(model_level, "is_XLA", False)
+    usage = require_dict(raw.get("usage_constraints"), "usage_constraints")
+    max_cost = usage.get("max_cost_usd")
+    if max_cost is not None and (not isinstance(max_cost, (int, float)) or max_cost <= 0):
+        raise ValidationError("usage_constraints.max_cost_usd must be a positive number when provided.")
+    max_power = usage.get("max_power_w")
+    if max_power is not None and (not isinstance(max_power, (int, float)) or max_power <= 0):
+        raise ValidationError("usage_constraints.max_power_w must be a positive number when provided.")
     if model_type in {"transformer", "transformer_encoder"}:
         result = _analyze_transformer_from_metadata(raw)
         scenario_kind = "full_sequence"
@@ -152,6 +176,14 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
     )
     result["inference_scenario"] = scenario
     result["is_XLA"] = is_xla
+    # result["max_cost_usd"] = max_cost
+    # result["max_power_w"] = max_power
+    result["usage_constraints"] = {
+        "batch_size": usage.get("batch_size"),
+        "target_latency_s": usage.get("target_latency_s"),
+        "max_cost_usd": max_cost,
+        "max_power_w": max_power,
+    }
     return result
 
 
