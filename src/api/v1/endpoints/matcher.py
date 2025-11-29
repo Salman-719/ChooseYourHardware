@@ -26,6 +26,8 @@ class MatchRequest(BaseModel):
     model: Dict[str, Any]
     device_dir: Optional[str] = None
     decode_tokens: Optional[int] = None
+    hardware_names: Optional[List[str]] = None
+    hardware_items: Optional[List[Dict[str, Any]]] = None
 
 
 class MatchResult(BaseModel):
@@ -51,12 +53,39 @@ def choose_best_device(request: MatchRequest) -> BestMatchResponse:
     """Run matcher over all device JSONs in a directory and pick the best device."""
     settings = get_settings()
     device_dir = Path(request.device_dir) if request.device_dir else settings.base_dir / "device_data"
-    if not device_dir.exists() or not device_dir.is_dir():
-        raise HTTPException(status_code=400, detail=f"Device directory not found: {device_dir}")
 
-    device_files = sorted(device_dir.glob("*.json"))
-    if not device_files:
-        raise HTTPException(status_code=400, detail=f"No device JSON files found in {device_dir}")
+    device_files: List[Path] = []
+    hardware_items: List[Dict[str, Any]] = []
+
+    # Load from directory if no explicit items provided
+    if request.hardware_items:
+        hardware_items.extend(request.hardware_items)
+    else:
+        if not device_dir.exists() or not device_dir.is_dir():
+            raise HTTPException(status_code=400, detail=f"Device directory not found: {device_dir}")
+        device_files = sorted(device_dir.glob("*.json"))
+        if not device_files:
+            raise HTTPException(status_code=400, detail=f"No device JSON files found in {device_dir}")
+
+    # If hardware_names provided, filter device_files to match
+    if request.hardware_names:
+        names = set(request.hardware_names)
+        device_files = [f for f in device_files if f.stem in names or f.name in names]
+        if not device_files and not hardware_items:
+            raise HTTPException(status_code=400, detail="No matching device files found for provided hardware_names.")
+
+    # Load device JSONs from files and combine with inline hardware
+    file_devices: List[Dict[str, Any]] = []
+    for f in device_files:
+        try:
+            with open(f, "r") as fh:
+                device_obj = json.load(fh)
+                file_devices.append(device_obj)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Skipping device file %s: %s", f, exc)
+    all_devices: List[Dict[str, Any]] = hardware_items + file_devices
+    if not all_devices:
+        raise HTTPException(status_code=400, detail="No devices could be loaded for evaluation.")
 
     try:
         # Analyze model once
@@ -70,20 +99,14 @@ def choose_best_device(request: MatchRequest) -> BestMatchResponse:
     best_device: Optional[Dict[str, Any]] = None
     best_bottleneck: Optional[str] = None
 
-    for f in device_files:
-        try:
-            with open(f, "r") as fh:
-                device_obj = json.load(fh)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Skipping device file %s: %s", f, exc)
-            continue
-
+    for idx, device_obj in enumerate(all_devices):
+        source = device_obj.get("hardware_id") or f"[device_{idx}]"
         # Normalize hardware spec
         try:
             hw_analysis = analyze_hardware_spec({"hardware_list": [device_obj]})
             normalized = hw_analysis["hardware_analysis"][0]["normalized"]
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Skipping device %s due to hardware analysis failure: %s", f, exc)
+            logger.warning("Skipping device %s due to hardware analysis failure: %s", source, exc)
             continue
 
         latency, bottleneck = calculate_inference_metrics(
@@ -91,12 +114,13 @@ def choose_best_device(request: MatchRequest) -> BestMatchResponse:
         )
 
         if not math.isfinite(latency):
-            logger.warning("Skipping device %s due to non-finite latency (%s)", f, latency)
+            logger.warning("Skipping device %s due to non-finite latency (%s)", source, latency)
             continue
-
+        device_obj["estimated_latency_seconds"] = latency
+        device_obj["inference_bottleneck"] = bottleneck
         evaluated.append(
             MatchResult(
-                device_file=str(f),
+                device_file=source,
                 device=device_obj,
                 latency_seconds=latency,
                 bottleneck=bottleneck,
@@ -110,7 +134,7 @@ def choose_best_device(request: MatchRequest) -> BestMatchResponse:
 
     if best_device is None:
         raise HTTPException(status_code=400, detail="No devices could be evaluated successfully.")
-
+    print(*[(x.device["hardware_id"], x.device["estimated_latency_seconds"]) for x in evaluated], sep='\n')
     return BestMatchResponse(
         best_device=best_device,
         best_latency_seconds=best_latency,
