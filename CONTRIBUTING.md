@@ -8,6 +8,8 @@ Thank you for your interest in contributing! This document provides guidelines a
 - Python 3.9 or higher
 - Git
 - Virtual environment tool (venv, conda, etc.)
+- OpenAI API key (for metadata extractor features)
+- Node.js 18+ (for frontend development)
 
 ### Setup Steps
 
@@ -30,6 +32,12 @@ Thank you for your interest in contributing! This document provides guidelines a
    pip install -e ".[dev]"
    ```
 
+4. **Set up environment variables (optional)**
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OPENAI_API_KEY if using metadata extractor
+   ```
+
 ## Development Workflow
 
 ### Code Organization
@@ -37,17 +45,16 @@ Thank you for your interest in contributing! This document provides guidelines a
 The project follows a layered architecture:
 
 ```
-src/choose_your_hardware/
-├── config/          # Configuration and constants
-├── exceptions/      # Custom exception hierarchy
-├── utils/          # Shared utilities (validators, converters, logging)
-├── analyzers/      # Core analysis engines
-│   ├── model/      # Model analyzers (classical, neural)
-│   └── hardware/   # Hardware analyzers
-├── api/            # FastAPI REST API
-├── cli/            # Command-line interfaces
-├── models/         # Pydantic data models (future)
-└── services/       # Business logic layer (future)
+src/
+├── config/              # Configuration and constants
+├── utils/              # Shared utilities (validators, converters, logging)
+├── analyzers/          # Core analysis engines
+│   ├── model/          # Model analyzers (classical, neural)
+│   └── hardware/       # Hardware analyzers
+├── matchers/           # Latency estimation and hardware matching
+├── metadata_extractor/ # LLM-powered metadata extraction
+├── api/                # FastAPI REST API
+└── cli/                # Command-line interfaces
 ```
 
 ### Coding Standards
@@ -197,11 +204,23 @@ chore: update dependencies in requirements
 5. Update documentation
 
 ### New API Endpoint
-1. Create endpoint in `src/choose_your_hardware/api/v1/endpoints/`
+1. Create endpoint in `src/api/v1/endpoints/`
 2. Define Pydantic request/response models
 3. Register router in `api/main.py`
 4. Add integration tests
 5. Update OpenAPI documentation
+
+### New Matcher Feature
+1. Update logic in `src/matchers/core.py`
+2. Add new scenario types to `config/constants.py` if needed
+3. Add unit tests in `tests/matchers/`
+4. Update MATH_AND_IO_SPECIFICATION.md
+
+### Metadata Extractor Prompts
+1. Update prompts in `src/metadata_extractor/prompts/`
+2. Test with various model types
+3. Add test scenarios to `test_scenarios.json`
+4. Run `test_simple.sh` to validate
 
 ## Testing
 
@@ -211,9 +230,29 @@ tests/
 ├── analyzers/
 │   ├── model/
 │   └── hardware/
+├── matchers/
+├── metadata_extractor/
 ├── api/
 ├── cli/
 └── utils/
+```
+
+### Running Tests
+```bash
+# All tests
+make test
+
+# Specific test file
+pytest tests/analyzers/model/test_neural.py -v
+
+# With coverage
+pytest tests/ --cov=src --cov-report=html
+
+# API integration tests (requires API running)
+./test_simple.sh
+
+# Full pipeline simulation
+./simulate_full_pipeline.sh
 ```
 
 ### Writing Tests
