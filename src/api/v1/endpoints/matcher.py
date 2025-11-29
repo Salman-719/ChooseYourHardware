@@ -50,7 +50,7 @@ class BestMatchResponse(BaseModel):
 def choose_best_device(request: MatchRequest) -> BestMatchResponse:
     """Run matcher over all device JSONs in a directory and pick the best device."""
     settings = get_settings()
-    device_dir = Path(request.device_dir) if request.device_dir else settings.base_dir / "device_data"
+    device_dir = Path("/home/htermos/Desktop/proj490/ChooseYourHardware/device_data")
     if not device_dir.exists() or not device_dir.is_dir():
         raise HTTPException(status_code=400, detail=f"Device directory not found: {device_dir}")
 
@@ -82,6 +82,7 @@ def choose_best_device(request: MatchRequest) -> BestMatchResponse:
         try:
             hw_analysis = analyze_hardware_spec({"hardware_list": [device_obj]})
             normalized = hw_analysis["hardware_analysis"][0]["normalized"]
+            normalized["cost_usd"] = float(hw_analysis["hardware_analysis"][0].get("cost_usd").split()[0])
         except Exception as exc:  # noqa: BLE001
             logger.warning("Skipping device %s due to hardware analysis failure: %s", f, exc)
             continue
@@ -109,7 +110,7 @@ def choose_best_device(request: MatchRequest) -> BestMatchResponse:
             best_bottleneck = bottleneck
 
     if best_device is None:
-        raise HTTPException(status_code=400, detail="No devices could be evaluated successfully.")
+        return {"results": "No suitable devices found."}
 
     return BestMatchResponse(
         best_device=best_device,
