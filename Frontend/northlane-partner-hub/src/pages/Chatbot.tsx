@@ -1,139 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  HardwareItem,
-  HardwareSelection,
-  applySelectionToInventory,
-  hasActiveSelection,
-  loadHardwareSelection,
-} from '@/lib/hardwareSelection';
-
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
-
-const clampSelection = (selection: HardwareSelection): HardwareSelection => ({
-  ...selection,
-  selectedIds: (selection.selectedIds || []).slice(0, 10),
-});
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 const METADATA_ENDPOINT = `${API_BASE_URL}/metadata/extract`;
 const MATCHER_ENDPOINT = `${API_BASE_URL}/matcher/best`;
 const DEVICE_DIR = import.meta.env.VITE_DEVICE_DIR || undefined;
 
-const numericValue = (value: unknown): number | null => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string') {
-    const cleaned = value.replace(/[^0-9.]/g, '');
-    const parsed = parseFloat(cleaned);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-
-const parsePrice = (price?: string | null): number | null => (price ? numericValue(price) : null);
-
-const getPowerDraw = (spec: Record<string, unknown>): number | null => {
-  const candidates = [
-    spec['power_limit_w'],
-    spec['power_watts'],
-    spec['power_consumption_w'],
-    spec['tdp_w'],
-    spec['tdp_watts'],
-    spec['tdp'],
-  ];
-  for (const candidate of candidates) {
-    const parsed = numericValue(candidate);
-    if (parsed !== null) return parsed;
-  }
-  return null;
-};
-
-const filterGpusForPreferences = (
-  items: HardwareItem[],
-  budget?: number,
-  powerLimit?: number,
-  isEdgeDevice?: boolean,
-): HardwareItem[] =>
-  items
-    .filter((item) => item.kind === 'gpu')
-    .filter((item) => {
-      const price = parsePrice(item.price);
-      if (!budget || price === null) return true;
-      return price <= budget;
-    })
-    .filter((item) => {
-      const power = getPowerDraw(item.spec || {});
-      if (!powerLimit || power === null) return true;
-      return power <= powerLimit;
-    })
-    .filter((item) => {
-      if (!isEdgeDevice) return true;
-      const power = getPowerDraw(item.spec || {});
-      if (power !== null) return power <= (powerLimit || 200);
-      // If we do not know the power draw, allow it so the list is not empty.
-      return true;
-    });
-
-const formatGpuSummary = (gpu: HardwareItem): string => {
-  const power = getPowerDraw(gpu.spec || {});
-  const spec = (gpu.spec || {}) as Record<string, unknown>;
-  const vram = numericValue(spec['vram_capacity_gb']) ?? spec['vram_capacity_gb'];
-  const tflops = numericValue(spec['peak_fp32_tflops']) ?? spec['peak_fp32_tflops'];
-  const bandwidth = numericValue(spec['vram_bandwidth_gbps']) ?? spec['vram_bandwidth_gbps'];
-
-  const parts = [gpu.vendor, gpu.model_name, gpu.price ? `(Price: ${gpu.price})` : null].filter(Boolean);
-
-  const specParts = [
-    vram !== null && vram !== undefined ? `${vram}GB VRAM` : null,
-    tflops !== null && tflops !== undefined ? `${tflops} TFLOPS FP32` : null,
-    bandwidth !== null && bandwidth !== undefined ? `${bandwidth} GB/s VRAM BW` : null,
-    power ? `${power}W est. power` : null,
-  ].filter(Boolean);
-
-  const lines = [`${parts.join(' ')}`];
-  if (specParts.length) {
-    lines.push(`Specs: ${specParts.join(' | ')}`);
-  }
-  if (gpu.url) {
-    lines.push(`Details: ${gpu.url}`);
-  }
-  return lines.join('\n');
-};
-
-const fetchGpuInventory = async (): Promise<HardwareItem[]> => {
-  const response = await fetch(`${API_BASE_URL}/hardware`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(false ? { Authorization: `Bearer ${null}`, 'x-api-key': null } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Backend returned an error while fetching hardware.');
-  }
-
-  const data = await response.json();
-  if (Array.isArray(data)) return data as HardwareItem[];
-  if (Array.isArray(data?.items)) return data.items as HardwareItem[];
-  return [];
-};
-
-const pickBestGpuIndex = async (_gpus: HardwareItem[]): Promise<number> => {
-  // Placeholder for the backend ranking endpoint: always returns the first GPU.
-  return 0;
-};
-
 const getAssistantResponse = async (
   userPrompt: string,
   _chatHistory: ChatMessage[],
-  recommendation: HardwareItem | null,
   sessionId: string,
   lastQuestion: string | null,
   hardwareFilter: number | string[],
@@ -175,10 +55,7 @@ const getAssistantResponse = async (
     return { reply: nextQuestion, nextQuestion, metadata };
   }
 
-  const recommendationLine = recommendation
-    ? `Current recommendation: ${recommendation.vendor} ${recommendation.model_name}.`
-    : 'No GPU has been selected yet.';
-  const summary = `Metadata extraction result:\n${JSON.stringify(metadata, null, 2)}\n${recommendationLine}`;
+  const summary = `Metadata extraction result:\n${JSON.stringify(metadata, null, 2)}`;
   return { reply: summary, nextQuestion: null, metadata: isComplete ? metadata : undefined };
 };
  
@@ -188,29 +65,18 @@ const Chatbot = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [finding, setFinding] = useState(false);
-  const [budget, setBudget] = useState('');
-  const [powerLimit, setPowerLimit] = useState('');
-  const [isEdgeDevice, setIsEdgeDevice] = useState(false);
-  const [recommendation, setRecommendation] = useState<HardwareItem | null>(null);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const lastQuestionRef = useRef<string | null>(null);
   const [modelMetadata, setModelMetadata] = useState<Record<string, unknown> | null>(null);
   const [matcherResult, setMatcherResult] = useState<string | null>(null);
   const [matcherLoading, setMatcherLoading] = useState(false);
-  const [hardwareSelection, setHardwareSelection] = useState<HardwareSelection>(() =>
-    clampSelection(loadHardwareSelection()),
-  );
-  const hardwareFilterPayload = hasActiveSelection(hardwareSelection)
-    ? clampSelection(hardwareSelection).selectedIds
-    : -1;
+  const hardwareFilterPayload = -1;
 
   useEffect(() => {
     setMessages([
       {
         role: 'assistant',
-        content:
-          'Tell me your budget, acceptable power consumption, and whether you need something edge/portable. I will pull GPUs from the backend, filter them, and recommend the best match.',
+        content: 'Tell me about your model and constraints. I will analyze and match suitable hardware.',
       },
     ]);
   }, []);
@@ -221,103 +87,6 @@ const Chatbot = () => {
       setMessage(initialMessage);
     }
   }, [location.state]);
-
-  useEffect(() => {
-    setHardwareSelection(clampSelection(loadHardwareSelection()));
-  }, [location.key]);
-
-  const preferencesSummary = useMemo(() => {
-    const budgetText = budget ? `$${budget}` : 'not specified';
-    const powerText = powerLimit ? `${powerLimit}W max` : 'not specified';
-    const mobilityText = isEdgeDevice ? 'Edge/portable' : 'Desktop/No';
-    return `Budget: ${budgetText}, Power: ${powerText}, Mobility: ${mobilityText}`;
-  }, [budget, powerLimit, isEdgeDevice]);
-
-  const selectionSummary = useMemo(() => {
-    if (hasActiveSelection(hardwareSelection)) {
-      const customNote = hardwareSelection.customHardware.length
-        ? ` (${hardwareSelection.customHardware.length} custom)`
-        : '';
-      return `Hardware filter on: ${hardwareSelection.selectedIds.length} selected${customNote}`;
-    }
-    if (hardwareSelection.customHardware.length) {
-      const count = hardwareSelection.customHardware.length;
-      return `${count} custom device${count === 1 ? '' : 's'} available (not filtered yet)`;
-    }
-    return 'No hardware filter applied';
-  }, [hardwareSelection]);
-
-  const handleFindGpu = async () => {
-    const budgetValueRaw = parseFloat(budget);
-    const powerValueRaw = parseFloat(powerLimit);
-    const budgetValue = Number.isFinite(budgetValueRaw) ? Math.max(0, budgetValueRaw) : budgetValueRaw;
-    const powerValue = Number.isFinite(powerValueRaw) ? Math.max(0, powerValueRaw) : powerValueRaw;
-
-    if (finding) return;
-
-    const currentSelection = clampSelection(loadHardwareSelection());
-    setHardwareSelection(currentSelection);
-    const filterNote = hasActiveSelection(currentSelection)
-      ? ` Applying your hardware filter (${currentSelection.selectedIds.length} selected).`
-      : '';
-
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', content: preferencesSummary },
-      { role: 'assistant', content: `Checking the GPU inventory against your constraints...${filterNote}` },
-    ]);
-
-    setFinding(true);
-
-    try {
-      const hardwareItems = await fetchGpuInventory();
-      const scopedInventory = applySelectionToInventory(hardwareItems, currentSelection);
-      const filtered = filterGpusForPreferences(
-        scopedInventory,
-        Number.isFinite(budgetValue) ? budgetValue : undefined,
-        Number.isFinite(powerValue) ? powerValue : undefined,
-        isEdgeDevice,
-      );
-
-      if (!filtered.length) {
-        setRecommendation(null);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: hasActiveSelection(currentSelection)
-              ? 'No GPUs matched those filters within your selection. Try relaxing the budget/power limits or adjust your hardware filter.'
-              : 'No GPUs matched those filters. Try relaxing the budget or power limits.',
-          },
-        ]);
-        return;
-      }
-
-      const bestIndex = await pickBestGpuIndex(filtered);
-      const chosen = filtered[Math.min(Math.max(bestIndex, 0), filtered.length - 1)];
-      setRecommendation(chosen);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `I found ${filtered.length} GPUs that fit${
-            hasActiveSelection(currentSelection) ? ' inside your selection' : ''
-          }. The current best pick is:\n${formatGpuSummary(chosen)}`,
-        },
-      ]);
-    } catch (error) {
-      const description = error instanceof Error ? error.message : 'Unknown error';
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `I could not reach the hardware service. ${description}`,
-        },
-      ]);
-    } finally {
-      setFinding(false);
-    }
-  };
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -332,7 +101,6 @@ const Chatbot = () => {
       const assistantMessage = await getAssistantResponse(
         userMessage,
         chatHistory,
-        recommendation,
         sessionIdRef.current,
         lastQuestionRef.current,
         hardwareFilterPayload,
@@ -401,71 +169,6 @@ const Chatbot = () => {
         <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
           <h1 className="text-4xl md:text-5xl font-bold">Hardware Assistant</h1>
 
-          <Card className="p-6 bg-card/80 backdrop-blur-sm border-2">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="budget">Budget ($)</Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  placeholder="e.g. 1200"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="power">Power consumption (W)</Label>
-                <Input
-                  id="power"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  placeholder="e.g. 200"
-                  value={powerLimit}
-                  onChange={(e) => setPowerLimit(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Edge device?</Label>
-                    <p className="text-sm text-muted-foreground">Prioritize low-power/mobile options</p>
-                  </div>
-                  <Switch checked={isEdgeDevice} onCheckedChange={setIsEdgeDevice} />
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col md:flex-row gap-3 mt-6">
-              <div className="flex-1 text-sm text-muted-foreground">
-                {recommendation
-                  ? `Current pick: ${recommendation.vendor} ${recommendation.model_name}`
-                  : 'Set your constraints and I will filter GPUs from the backend dataset.'}
-                <div className="text-xs text-muted-foreground mt-1">{selectionSummary}</div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 md:w-auto w-full">
-                <Button
-                  variant="outline"
-                  onClick={() => navigate('/hardware-filter')}
-                  className="w-full sm:w-auto"
-                >
-                  Manage filter
-                </Button>
-                <Button onClick={handleFindGpu} disabled={finding} className="w-full sm:w-auto">
-                  {finding ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    'Find the best GPU'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </Card>
-
           <div className="space-y-4 mb-8 min-h-[400px]">
             {messages.length === 0 && (
               <Card className="p-8 bg-card/80 backdrop-blur-sm border-2">
@@ -489,7 +192,7 @@ const Chatbot = () => {
               </Card>
             ))}
 
-            {(loading || finding) && (
+            {(loading || matcherLoading) && (
               <Card className="p-6 bg-card border-2 mr-auto max-w-[80%]">
                 <div className="text-sm font-medium mb-2">Assistant</div>
                 <div className="text-muted-foreground">
@@ -509,11 +212,7 @@ const Chatbot = () => {
           <Card className="p-6 bg-card/80 backdrop-blur-sm border-2 sticky bottom-6">
             <div className="space-y-4">
               <Textarea
-                placeholder={
-                  recommendation
-                    ? 'Ask me anything about this GPU or compare with others...'
-                    : 'Share constraints above first, then ask follow-up questions here...'
-                }
+                placeholder="Share constraints and questions here..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => {
