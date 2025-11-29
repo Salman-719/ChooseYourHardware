@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
 from utils.logging import get_logger, setup_logging
 from metadata_extractor.routers.hardware_router import router as crawler_router
-from .v1.endpoints import hardware, matcher, metadata, models
+from v1.endpoints import hardware, matcher, metadata, models
 
 logger = get_logger(__name__)
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     
     settings = get_settings()
     uvicorn.run(
-        "choose_your_hardware.api.main:app",
+        "api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.environment == "development",
