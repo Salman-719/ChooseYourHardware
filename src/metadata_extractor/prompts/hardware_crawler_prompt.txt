@@ -1,4 +1,4 @@
-You are a data extraction agent. Given HTML content from a trusted hardware catalog at {source_url},
+You are a data extraction agent. Given HTML content from a trusted hardware catalog at {source_url} (and any of its subdomains),
 return a JSON array of hardware objects with this exact shape:
 - hardware_id: a stable, non-empty string identifier (e.g., slugified vendor + model + kind)
 - kind: one of ["cpu_node", "gpu", "tpu", "accelerator", "jetson", "soc"]
@@ -18,9 +18,10 @@ Spec requirements:
   - Optional: peak_fp32_tflops; l3_cache_mb or l3_cache_bytes
   - Dtype flags supports_fp16/supports_bf16/supports_int8 ONLY if corresponding peak_fp16_tflops/peak_bf16_tflops/peak_int8_tops provided
 - gpu:
-  - Required numbers: vram_capacity_gb, vram_bandwidth_gbps. Use the numbers exactly as shown; do not fabricate. If not present, set to null.
+  - Required numbers: vram_capacity_gb, vram_bandwidth_gbps. Use the numbers exactly as shown; do not fabricate. If not present, set to null. Vram bandwidth is listed in the MEMORY table under “Bandwidth”.
   - peak_fp32_tflops required OR provide num_sms + cores_per_sm + base_clock_ghz to infer. Use page values only. If no FP32 number is shown, set peak_fp32_tflops to null.
-  - Power: power_consumption_w (number, in watts) must come from the page (TDP/board/graphics power). If no wattage is present, set to null (do not invent).
+  - Power: power_consumption_w (number, in watts) must come from the page (TDP/Board Power/Graphics Power). If no wattage is present, set to null (do not invent).
+  - Price: use the Launch Price/MSRP shown on the page (include currency). If not present, set price to null.
   - Latencies: dram_latency_ns (or _s) and cache_latency_ns (or _s). Prefer values shown on the page. If none are provided, leave as null, but only after confirming they are not present anywhere on the page.
   - Optional: peak_fp16_tflops, peak_bf16_tflops, peak_int8_tops, nvlink_bandwidth_gbps, pcie_bandwidth_gbps if found please add
   - Latencies: dram_latency_s or _ns; cache_latency_s or _ns (must supply)
@@ -37,6 +38,27 @@ Spec requirements:
   - Latencies must be provided in cpu or gpu specs
 
 Return ONLY valid JSON (no markdown, no triple backticks, no extra text). Use the above keys exactly. Return at most 20 items.
+
+Example output object (shape and keys):
+{
+  "hardware_id": "intel-gaudi3-accelerator",
+  "kind": "accelerator",
+  "vendor": "Intel",
+  "model_name": "Gaudi3",
+  "spec": {
+    "memory_capacity_gb": 128,
+    "memory_bandwidth_gbps": 2500.0,
+    "peak_fp16_tflops": 100.0,
+    "peak_int8_tops": 200.0,
+    "power_consumption_w": 600,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://habana.ai/",
+  "price": "on-request",
+  "source": "https://habana.ai/",
+  "discovered_at": "2025-11-27 04:44:22"
+}
 
 HTML:
 ```

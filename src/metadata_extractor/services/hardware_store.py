@@ -2,28 +2,18 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, TypedDict
 
+from config.settings import get_settings
 from metadata_extractor.services.hardware_models import HardwareRecord
 
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-def _get_db_path() -> Path:
-    env_path = os.getenv("HARDWARE_DB_PATH")
-    path = Path(env_path) if env_path else (BASE_DIR / "hardware.db")
-    if not path.is_absolute():
-        path = BASE_DIR / path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-HARDWARE_DB_PATH = _get_db_path()
+settings = get_settings()
+DEVICE_DATA_DIR = settings.base_dir / "device_data"
+DEVICE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class HardwareItem(TypedDict, total=False):
@@ -35,126 +25,98 @@ class HardwareItem(TypedDict, total=False):
     url: str | None
     price: str | None
     source: str | None
+    discovered_at: str | None
 
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(HARDWARE_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _hardware_path(record: HardwareRecord) -> Path:
+    filename = f"{record.hardware_id}.json"
+    return DEVICE_DATA_DIR / filename
 
 
-def init_db(db_path: Path | None = None) -> None:
+def _with_latency_defaults(spec: dict) -> dict:
     """
-    Create or refresh the hardware table if it doesn't match the expected schema.
+    Ensure latency fields have defaults when missing.
     """
-    path = db_path or HARDWARE_DB_PATH
-    expected_columns = {
-        "id",
-        "hardware_id",
-        "kind",
-        "vendor",
-        "model_name",
-        "spec_json",
-        "url",
-        "price",
-        "source",
-        "discovered_at",
-    }
-
-    with sqlite3.connect(path) as conn:
-        cur = conn.execute("PRAGMA table_info(hardware_items)")
-        existing_columns = {row[1] for row in cur.fetchall()}
-        if existing_columns and existing_columns != expected_columns:
-            logger.warning("Recreating hardware_items table to match expected schema")
-            conn.execute("DROP TABLE IF EXISTS hardware_items")
-
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS hardware_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                hardware_id TEXT UNIQUE,
-                kind TEXT,
-                vendor TEXT,
-                model_name TEXT,
-                spec_json TEXT,
-                url TEXT,
-                price TEXT,
-                source TEXT,
-                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        conn.commit()
+    updated = dict(spec) if spec is not None else {}
+    if updated.get("dram_latency_ns") is None and updated.get("dram_latency_s") is None:
+        updated["dram_latency_ns"] = 200.0
+    if updated.get("cache_latency_ns") is None and updated.get("cache_latency_s") is None:
+        updated["cache_latency_ns"] = 10.0
+    return updated
 
 
 def upsert_hardware(items: Iterable[HardwareItem]) -> int:
     """
-    Insert new hardware rows, skipping duplicates by hardware_id. Returns count inserted.
+    Write hardware records to device_data as JSON files.
+    Returns the count of newly created files (existing files are overwritten but not counted).
     """
-    init_db()
     inserted = 0
-    with _get_connection() as conn:
-        for item in items:
-            record = HardwareRecord.model_validate(item)
-            spec_json = json.dumps(record.spec)
-            try:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO hardware_items (
-                        hardware_id, kind, vendor, model_name, spec_json, url, price, source
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        record.hardware_id,
-                        record.kind,
-                        record.vendor,
-                        record.model_name,
-                        spec_json,
-                        record.url,
-                        record.price,
-                        record.source,
-                    ),
-                )
-                if conn.total_changes > inserted:
-                    inserted += 1
-            except sqlite3.Error:
-                # Keep going even if a single row fails
-                continue
-        conn.commit()
+    for item in items:
+        record = HardwareRecord.model_validate(item)
+        path = _hardware_path(record)
+        was_new = not path.exists()
+        spec_with_defaults = _with_latency_defaults(record.spec)
+        payload = {
+            "hardware_id": record.hardware_id,
+            "kind": record.kind,
+            "vendor": record.vendor,
+            "model_name": record.model_name,
+            "spec": spec_with_defaults,
+            "url": record.url,
+            "price": record.price,
+            "source": record.source,
+            "discovered_at": getattr(record, "discovered_at", None)
+            or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        try:
+            path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            if was_new:
+                inserted += 1
+                logger.info("Wrote new hardware file %s", path.name)
+            else:
+                logger.debug("Updated existing hardware file %s", path.name)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to write hardware file %s: %s", path, exc)
+            continue
     return inserted
 
 
 def list_hardware(limit: int = 50) -> List[HardwareItem]:
-    init_db()
-    with _get_connection() as conn:
-        cur = conn.execute(
-            """
-            SELECT hardware_id, kind, vendor, model_name, spec_json, url, price, source, discovered_at
-            FROM hardware_items
-            ORDER BY discovered_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        rows = []
-        for row in cur.fetchall():
-            spec_json = row["spec_json"] or "{}"
+    """
+    Read hardware definitions from the device_data directory.
+    """
+    items: List[HardwareItem] = []
+    for path in sorted(DEVICE_DATA_DIR.glob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            record = HardwareRecord.model_validate(raw)
+            payload: HardwareItem = {
+                "hardware_id": record.hardware_id,
+                "kind": record.kind,
+                "vendor": record.vendor,
+                "model_name": record.model_name,
+                "spec": record.spec,
+                "url": record.url,
+                "price": record.price,
+                "source": record.source,
+                "discovered_at": raw.get("discovered_at") if isinstance(raw, dict) else None,
+            }
+            items.append(payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Skipping invalid hardware file %s: %s", path, exc)
+            continue
+
+    def _sort_key(item: HardwareItem):
+        ts = item.get("discovered_at")
+        if isinstance(ts, str):
             try:
-                spec = json.loads(spec_json)
-            except json.JSONDecodeError:
-                spec = {}
-            rows.append(
-                {
-                    "hardware_id": row["hardware_id"],
-                    "kind": row["kind"],
-                    "vendor": row["vendor"],
-                    "model_name": row["model_name"],
-                    "spec": spec,
-                    "url": row["url"],
-                    "price": row["price"],
-                    "source": row["source"],
-                    "discovered_at": row["discovered_at"],
-                }
-            )
-        return rows
+                return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return datetime.min
+        try:
+            return datetime.fromtimestamp((DEVICE_DATA_DIR / f"{item.get('hardware_id')}.json").stat().st_mtime)
+        except Exception:
+            return datetime.min
+
+    items_sorted = sorted(items, key=_sort_key, reverse=True)
+    return items_sorted[:limit]
