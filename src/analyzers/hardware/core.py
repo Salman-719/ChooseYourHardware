@@ -46,6 +46,8 @@ def _analyze_single_hardware(hardware: Dict[str, Any]) -> Dict[str, Any]:
         "vendor": vendor,
         "model_name": model_name,
         "normalized": normalized,
+        "cost_usd": normalized.get("price"),
+        "power_w": normalized.get("power_w"),
     }
 
 

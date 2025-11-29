@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 
 import httpx
 from openai import OpenAI
+from dotenv import load_dotenv
 
 from config.settings import get_settings
 from metadata_extractor.services.hardware_models import HardwareRecord
@@ -15,15 +16,20 @@ from metadata_extractor.services.hardware_store import upsert_hardware
 
 logger = logging.getLogger(__name__)
 
+# Load .env so os.getenv picks up crawler settings when run locally
+load_dotenv(override=False)
+
 settings = get_settings()
 
 OPENAI_API_KEY = settings.openai_api_key
 OPENAI_LLM_MODEL = settings.openai_model
 HARDWARE_LLM_MODEL = os.getenv("HARDWARE_LLM_MODEL")
-HARDWARE_FEED_URL = os.getenv("HARDWARE_FEED_URL", "https://example.com")
+HARDWARE_FEED_URL = os.getenv("HARDWARE_FEED_URL", "https://www.techpowerup.com/gpu-specs/")
 HARDWARE_FEED_FILE = os.getenv("HARDWARE_FEED_FILE")
 HARDWARE_CRAWL_INTERVAL_SECONDS = int(os.getenv("HARDWARE_CRAWL_INTERVAL_SECONDS", "3600"))
 HARDWARE_MAX_ITEMS = int(os.getenv("HARDWARE_MAX_ITEMS", "20"))
+HARDWARE_LOG_FILE = os.getenv("HARDWARE_LOG_FILE")
+HARDWARE_DB_PATH = os.getenv("HARDWARE_DB_PATH")
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -46,10 +52,90 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 _crawler_task: asyncio.Task | None = None
 
 
+def _maybe_attach_file_logger() -> None:
+    """Attach a file handler for crawler logs if HARDWARE_LOG_FILE is set."""
+    if not HARDWARE_LOG_FILE:
+        return
+    log_path = Path(HARDWARE_LOG_FILE)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    already = any(
+        isinstance(h, logging.FileHandler) and Path(getattr(h, "baseFilename", "")) == log_path
+        for h in logger.handlers
+    )
+    if already:
+        return
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setLevel(logger.level or logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("File logging enabled at %s", log_path)
+
+
+def _ensure_console_logger() -> None:
+    """Attach a console handler when none are present so logs always show up in stdout."""
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
+def _log_llm_io(stage: str, content: str, limit: int = 1000) -> None:
+    """Log LLM input/output with length and a safe preview."""
+    preview = (content[:limit] + "...") if len(content) > limit else content
+    logger.info("%s len=%s preview=%r", stage, len(content), preview)
+
+
+def _log_settings_snapshot() -> None:
+    """Emit a one-time snapshot of key crawler settings for debugging."""
+    logger.info(
+        "Crawler settings: feed_url=%s feed_file=%s llm_model=%s hw_llm_model=%s db_path=%s max_items=%s",
+        HARDWARE_FEED_URL,
+        HARDWARE_FEED_FILE,
+        OPENAI_LLM_MODEL,
+        HARDWARE_LLM_MODEL,
+        HARDWARE_DB_PATH,
+        HARDWARE_MAX_ITEMS,
+    )
+
+def _log_html(stage: str, html: str, limit: int = 4000) -> None:
+    """Log HTML length with a trimmed preview to avoid huge log lines."""
+    preview = (html[:limit] + "...") if len(html) > limit else html
+    logger.info("%s html_len=%s preview=%r", stage, len(html), preview)
+
+
+def _sanitize_html(html: str) -> str:
+    """
+    Strip obvious noise (scripts/styles/comments) and collapse whitespace to reduce LLM trash.
+    """
+    import re
+
+    cleaned = re.sub(r"(?is)<script.*?>.*?</script>", " ", html)
+    cleaned = re.sub(r"(?is)<style.*?>.*?</style>", " ", cleaned)
+    cleaned = re.sub(r"(?is)<!--.*?-->", " ", cleaned)
+    # Prefer body content if present.
+    body_match = re.search(r"(?is)<body[^>]*>(.*)</body>", cleaned)
+    if body_match:
+        cleaned = body_match.group(1)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
 async def _get_with_retries(url: str, max_attempts: int = 5, backoff_seconds: float = 5.0) -> str:
     """
     Fetch a URL with simple retry/backoff to handle occasional 429s.
     """
+    _maybe_attach_file_logger()
     headers = {"User-Agent": "ChooseYourHardwareCrawler/1.0 (+https://example.com)"}
     last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
@@ -114,14 +200,17 @@ def _fallback_links_from_html(feed_html: str, source_url: str, max_links: int = 
 async def _fetch_feed() -> str:
     if HARDWARE_FEED_FILE:
         try:
+            logger.info("Reading feed HTML from file %s", HARDWARE_FEED_FILE)
             return Path(HARDWARE_FEED_FILE).read_text(encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to read HARDWARE_FEED_FILE %s: %s", HARDWARE_FEED_FILE, exc)
     # Fall back to network fetch.
+    logger.info("Fetching feed HTML from %s", HARDWARE_FEED_URL)
     return await _get_with_retries(HARDWARE_FEED_URL)
 
 
 async def _fetch_page(url: str) -> str:
+    logger.debug("Fetching detail page %s", url)
     return await _get_with_retries(url)
 
 
@@ -135,37 +224,60 @@ async def _discover_links(feed_html: str, source_url: str, max_links: int = 10) 
         max_links=max_links,
         html=feed_html[:80000],
     )
+    _log_html("Feed HTML for discovery", feed_html)
+    _log_llm_io("LLM discover prompt", prompt)
     response = client.responses.create(
         model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
         input=prompt,
     )
+    _log_llm_io("LLM discover raw output", response.output_text or "")
     links: List[str] = []
     try:
         parsed = json.loads(response.output_text)
-        for raw in parsed if isinstance(parsed, list) else []:
+        candidate_list: List[str] = []
+        if isinstance(parsed, list):
+            candidate_list = parsed
+        elif isinstance(parsed, dict):
+            if isinstance(parsed.get("urls"), list):
+                candidate_list = parsed.get("urls") or []
+            elif isinstance(parsed.get("url"), str):
+                candidate_list = [parsed.get("url")]
+        for raw in candidate_list:
             if not isinstance(raw, str):
                 continue
-            full = urljoin(source_url, raw.strip())
+            cleaned = raw.strip()
+            if not cleaned.startswith("http"):
+                cleaned = "/" + cleaned.lstrip("/")  # ensure single leading slash for urljoin
+            full = urljoin(source_url, cleaned)
             if full and full not in links:
                 links.append(full)
     except json.JSONDecodeError:
         links = []
 
     if not links:
+        logger.info("LLM did not yield links; falling back to regex extraction")
         links = _fallback_links_from_html(feed_html, source_url, max_links=max_links)
 
-    logger.info("Link discovery produced %d links", len(links))
-    return links
+    limited = links[: max_links or 1]
+    logger.info("Link discovery produced %d links (limited to %d): %s", len(limited), max_links or 1, limited)
+    return limited
 
 
 async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[HardwareRecord]:
     """
     Ask the model to pull structured hardware items out of the HTML feed using the shared prompt.
     """
+    # Include more of the combined feed+detail HTML to give the LLM full context.
+    sanitized = _sanitize_html(feed_html)
+    html_slice = sanitized[:600000]
     prompt = HARDWARE_CRAWLER_PROMPT.format(
         source_url=source_url,
-        html=feed_html[:120000],
+        html=html_slice,
     )
+    logger.info("LLM extract prompt_len=%s feed_len=%s sanitized_len=%s", len(prompt), len(feed_html), len(sanitized))
+    _log_html("Combined HTML for extract", sanitized)
+    _log_llm_io("LLM extract prompt", prompt)
+
     response = client.responses.create(
         model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
         input=prompt,
@@ -174,7 +286,10 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
         logger.warning("LLM returned empty output for hardware extraction")
         return []
 
-    raw_text = _clean_json_text(response.output_text or "")
+    raw_output = response.output_text or ""
+    logger.info("LLM extract raw_output_len=%s", len(raw_output))
+    _log_llm_io("LLM extract raw output", raw_output)
+    raw_text = _clean_json_text(raw_output)
     try:
         parsed = json.loads(raw_text)
     except json.JSONDecodeError:
@@ -194,11 +309,13 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
         if parsed is None:
             # Attempt repair once
             repair_prompt = REPAIR_PROMPT.format(raw=raw_text[:4000])
+            _log_llm_io("LLM repair prompt", repair_prompt)
             repair_resp = client.responses.create(
                 model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
                 input=repair_prompt,
             )
             repair_text = _clean_json_text(repair_resp.output_text or "")
+            _log_llm_io("LLM repair raw output", repair_resp.output_text or "")
             try:
                 parsed = json.loads(repair_text)
             except json.JSONDecodeError:
@@ -243,7 +360,7 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
             items.append(record)
         except Exception as exc:  # noqa: BLE001
             skipped += 1
-            logger.debug("Skipping invalid hardware item: %s", exc)
+            logger.warning("Skipping invalid hardware item (%s): %s", raw.get("hardware_id", "unknown"), exc)
             continue
     if skipped:
         logger.info("Parsed %s items; skipped %s due to validation", len(items), skipped)
@@ -256,21 +373,34 @@ async def crawl_once() -> int:
     Returns the count of newly inserted rows.
     """
     try:
+        _ensure_console_logger()
+        _log_settings_snapshot()
         html = await _fetch_feed()
+        logger.info("Feed HTML length=%s", len(html))
         detail_links = await _discover_links(html, HARDWARE_FEED_URL, max_links=10)
         detail_html = ""
         for link in detail_links:
             try:
                 await asyncio.sleep(1.0)
                 detail_html += f"\n\n<!-- PAGE {link} -->\n"
-                detail_html += await _fetch_page(link)
+                page = await _fetch_page(link)
+                detail_html += page
+                logger.info("Fetched detail page %s (chars=%s)", link, len(page))
             except Exception as exc:  # noqa: BLE001
                 logger.debug("Failed to fetch detail page %s: %s", link, exc)
                 continue
         combined_html = html + "\n\n" + detail_html
+        logger.info("Combined HTML length=%s", len(combined_html))
         items = await _extract_items_from_feed(combined_html, HARDWARE_FEED_URL)
+        logger.info("Attempting to upsert %s parsed items into device_data", len(items))
         inserted = upsert_hardware(items)
-        logger.info("Hardware crawl finished: %s items parsed, %s inserted", len(items), inserted)
+        logger.info(
+            "Hardware crawl finished: %s items parsed, %s written to device_data",
+            len(items),
+            inserted,
+        )
+        if inserted == 0:
+            logger.warning("Crawl completed but inserted=0; check LLM output validity and file permissions")
         return inserted
     except Exception as exc:
         logger.exception("Hardware crawl failed: %s", exc)

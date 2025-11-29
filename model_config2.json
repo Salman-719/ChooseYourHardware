@@ -1,0 +1,369 @@
+{
+"usage_constraints": {
+"batch_size": 8,
+"target_latency_s": 0.1,
+"max_cost_usd": 100000,
+"max_power_w": 50
+},
+"model_level": {
+"input_shape": [
+3,
+640,
+640
+],
+"precision": "fp32",
+"framework": "pytorch",
+"model_type": "detector",
+"is_XLA": false,
+"total_params": 2870652,
+"trainable_params": 2870652,
+"non_trainable_params": 0
+},
+"layer_summary": [
+{
+"name": "input",
+"type": "InputLayer",
+"output_shape": [
+null,
+3,
+640,
+640
+],
+"params": 0,
+"__fields__": {
+"dtype": "float32",
+"batch_size": null,
+"shape": [
+3,
+640,
+640
+],
+"sparse": false,
+"ragged": false,
+"name": "input"
+}
+},
+{
+"name": "stem_conv",
+"type": "Conv2D",
+"output_shape": [
+null,
+32,
+320,
+320
+],
+"params": 864,
+"__fields__": {
+"filters": 32,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+2,
+2
+],
+"padding": "same",
+"data_format": "channels_first",
+"dilation_rate": [
+1,
+1
+],
+"groups": 1,
+"activation": "swish",
+"use_bias": false,
+"kernel_initializer": null,
+"bias_initializer": null,
+"kernel_regularizer": null,
+"bias_regularizer": null,
+"activity_regularizer": null,
+"kernel_constraint": null,
+"bias_constraint": null
+}
+},
+{
+"name": "backbone_p2_c2f",
+"type": "Conv2D",
+"output_shape": [
+null,
+64,
+160,
+160
+],
+"params": 18432,
+"__fields__": {
+"filters": 64,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+2,
+2
+],
+"padding": "same",
+"data_format": "channels_first",
+"dilation_rate": [
+1,
+1
+],
+"groups": 1,
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "backbone_p3_c2f",
+"type": "Conv2D",
+"output_shape": [
+null,
+128,
+80,
+80
+],
+"params": 73728,
+"__fields__": {
+"filters": 128,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+2,
+2
+],
+"padding": "same",
+"data_format": "channels_first",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "backbone_p4_c2f",
+"type": "Conv2D",
+"output_shape": [
+null,
+256,
+40,
+40
+],
+"params": 294912,
+"__fields__": {
+"filters": 256,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+2,
+2
+],
+"padding": "same",
+"data_format": "channels_first",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "backbone_p5_c2f",
+"type": "Conv2D",
+"output_shape": [
+null,
+512,
+20,
+20
+],
+"params": 1179648,
+"__fields__": {
+"filters": 512,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+2,
+2
+],
+"padding": "same",
+"data_format": "channels_first",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "sppf",
+"type": "Conv2D",
+"output_shape": [
+null,
+512,
+20,
+20
+],
+"params": 262144,
+"__fields__": {
+"filters": 512,
+"kernel_size": [
+1,
+1
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "neck_p5",
+"type": "Conv2D",
+"output_shape": [
+null,
+256,
+20,
+20
+],
+"params": 131072,
+"__fields__": {
+"filters": 256,
+"kernel_size": [
+1,
+1
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "neck_p4",
+"type": "Conv2D",
+"output_shape": [
+null,
+256,
+20,
+20
+],
+"params": 589824,
+"__fields__": {
+"filters": 256,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "neck_p3",
+"type": "Conv2D",
+"output_shape": [
+null,
+128,
+20,
+20
+],
+"params": 294912,
+"__fields__": {
+"filters": 128,
+"kernel_size": [
+3,
+3
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "swish",
+"use_bias": false
+}
+},
+{
+"name": "detect_p3",
+"type": "Conv2D",
+"output_shape": [
+null,
+84,
+20,
+20
+],
+"params": 10836,
+"__fields__": {
+"filters": 84,
+"kernel_size": [
+1,
+1
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "linear",
+"use_bias": true
+}
+},
+{
+"name": "detect_p4",
+"type": "Conv2D",
+"output_shape": [
+null,
+84,
+20,
+20
+],
+"params": 7140,
+"__fields__": {
+"filters": 84,
+"kernel_size": [
+1,
+1
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "linear",
+"use_bias": true
+}
+},
+{
+"name": "detect_p5",
+"type": "Conv2D",
+"output_shape": [
+null,
+84,
+20,
+20
+],
+"params": 7140,
+"__fields__": {
+"filters": 84,
+"kernel_size": [
+1,
+1
+],
+"strides": [
+1,
+1
+],
+"padding": "same",
+"activation": "linear",
+"use_bias": true
+}
+}
+]
+}
