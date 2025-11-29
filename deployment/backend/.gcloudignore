@@ -1,0 +1,51 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore.
+
+.gcloudignore
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local files
+.env
+*.log
+
+# Test files
+tests/
+test_*.sh
+test_*.json
+simulate_*.sh
+
+# Documentation
+*.md
+!README.md
+
+# Frontend (if not deploying together)
+Frontend/
+NeuSight/
+
+# Data
+device_data/
+examples/

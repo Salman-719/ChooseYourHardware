@@ -1,0 +1,19 @@
+{
+  "hardware_id": "google-tpu-v5e",
+  "kind": "tpu",
+  "vendor": "Google",
+  "model_name": "TPU v5e",
+  "spec": {
+    "memory_capacity_gb": 16,
+    "memory_bandwidth_gbps": 1200.0,
+    "peak_bf16_tflops": 197.0,
+    "peak_int8_tops": 394.0,
+    "power_consumption_w": 250,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://cloud.google.com/tpu",
+  "price": "on-demand",
+  "source": "https://cloud.google.com/tpu",
+  "discovered_at": "2025-11-27 04:44:22"
+}

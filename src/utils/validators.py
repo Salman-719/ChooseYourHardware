@@ -59,6 +59,7 @@ def require_int(obj: dict[str, Any], key: str, *, positive: bool = False) -> int
         ValueError: If validation fails
     """
     if key not in obj:
+        print(f"\n\n\n\nBBBBB\n\n\n{obj}")
         raise ValueError(f"Missing required field '{key}'")
 
     val = obj[key]

@@ -84,6 +84,7 @@ async def extract_metadata(
 
         response = await extract_model_metadata(req_for_service)
 
+        print("\n\nReasspose:\n", response, "\n\n")
         if request.session_id:
             _sessions[request.session_id] = {
                 "current_state": response.metadata,
@@ -94,7 +95,6 @@ async def extract_metadata(
             logger.info("Metadata extraction completed successfully")
         else:
             logger.info(f"Next question: {response.next_question}")
-        
         return response
 
     except Exception as exc:

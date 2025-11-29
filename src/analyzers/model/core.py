@@ -102,7 +102,8 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     elif model_type == "llm_decoder":
         if seq_length is None:
             raise ValidationError("sequence_length is required for llm_decoder models.")
-        result = llm.analyze_llm_decoder(raw, dtype_bits, dtype_bytes, batch_size, seq_length)
+        meta = raw.get("llm_config") or raw.get("model_level") or raw.get("llm_metadata")
+        result = llm.analyze_llm_decoder(None, dtype_bits, dtype_bytes, batch_size, seq_length, llm_metadata=meta)
         scenario_kind = "full_sequence+decode"
     else:
         raise ValidationError(f"Unhandled model_type '{model_type}'.")
@@ -115,6 +116,28 @@ def _dispatch_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
         result.setdefault("activation_sum_bytes", act_bytes)
         result.setdefault("activation_peak_bytes", act_bytes)
         result["activation_memory_bytes"] = result.get("activation_memory_bytes", act_bytes)
+    # Optional XLA flag for TPU-compiled models
+    is_xla = raw.get("is_XLA", False)
+    if not isinstance(is_xla, bool):
+        raise ValidationError("is_XLA must be a boolean when provided.")
+    result["is_XLA"] = is_xla
+
+    # Optional cost and power constraints
+    max_cost = raw.get("max_cost_usd")
+    if max_cost is not None and (not isinstance(max_cost, (int, float)) or max_cost <= 0):
+        raise ValidationError("max_cost_usd must be a positive number when provided.")
+    max_power = raw.get("max_power_w")
+    if max_power is not None and (not isinstance(max_power, (int, float)) or max_power <= 0):
+        raise ValidationError("max_power_w must be a positive number when provided.")
+    # result["max_cost_usd"] = max_cost
+    # result["max_power_w"] = max_power
+
+    # Expose usage constraints for downstream matcher
+    result["usage_constraints"] = {
+        "batch_size": batch_size,
+        "max_cost_usd": max_cost,
+        "max_power_w": max_power,
+    }
     return result
 
 
@@ -129,6 +152,14 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
     """Handle metadata-extractor style payloads that include usage/model/layers."""
     model_level = require_dict(raw.get("model_level"), "model_level")
     model_type = model_level.get("model_type")
+    is_xla = _get_bool_with_default(model_level, "is_XLA", False)
+    usage = require_dict(raw.get("usage_constraints"), "usage_constraints")
+    max_cost = usage.get("max_cost_usd")
+    if max_cost is not None and (not isinstance(max_cost, (int, float)) or max_cost <= 0):
+        raise ValidationError("usage_constraints.max_cost_usd must be a positive number when provided.")
+    max_power = usage.get("max_power_w")
+    if max_power is not None and (not isinstance(max_power, (int, float)) or max_power <= 0):
+        raise ValidationError("usage_constraints.max_power_w must be a positive number when provided.")
     if model_type in {"transformer", "transformer_encoder"}:
         result = _analyze_transformer_from_metadata(raw)
         scenario_kind = "full_sequence"
@@ -145,6 +176,15 @@ def _dispatch_metadata_style(raw: Dict[str, Any]) -> Dict[str, Any]:
         scenario_kind,
     )
     result["inference_scenario"] = scenario
+    result["is_XLA"] = is_xla
+    # result["max_cost_usd"] = max_cost
+    # result["max_power_w"] = max_power
+    result["usage_constraints"] = {
+        "batch_size": usage.get("batch_size"),
+        "target_latency_s": usage.get("target_latency_s"),
+        "max_cost_usd": max_cost,
+        "max_power_w": max_power,
+    }
     return result
 
 
@@ -237,25 +277,20 @@ def _analyze_llm_from_metadata(raw: Dict[str, Any]) -> Dict[str, Any]:
     include_pos_embeddings = _get_bool_with_default(model_level, "include_positional_embeddings", True)
     include_kv_cache = _get_bool_with_default(model_level, "include_kv_cache", True)
 
-    config = {
-        "model_type": "llm_decoder",
-        "precision": precision,
-        "inference_config": {"batch_size": batch_size, "sequence_length": seq_length},
-        "llm_config": {
-            "num_layers": num_layers,
-            "hidden_size": hidden,
-            "ffn_size": ffn_size,
-            "num_heads": num_heads,
-            "vocab_size": vocab_size,
-            "max_sequence_length": max_seq_len,
-            "use_bias": use_bias,
-            "use_layernorm": use_layernorm,
-            "include_embeddings": include_embeddings,
-            "include_positional_embeddings": include_pos_embeddings,
-            "include_kv_cache": include_kv_cache,
-        },
+    llm_metadata = {
+        "num_layers": num_layers,
+        "hidden_size": hidden,
+        "ffn_size": ffn_size,
+        "num_heads": num_heads,
+        "vocab_size": vocab_size,
+        "max_sequence_length": max_seq_len,
+        "use_bias": use_bias,
+        "use_layernorm": use_layernorm,
+        "include_embeddings": include_embeddings,
+        "include_positional_embeddings": include_pos_embeddings,
+        "include_kv_cache": include_kv_cache,
     }
-    return llm.analyze_llm_decoder(config, dtype_bits, dtype_bytes, batch_size, seq_length)
+    return llm.analyze_llm_decoder(None, dtype_bits, dtype_bytes, batch_size, seq_length, llm_metadata=llm_metadata)
 
 
 def _get_bool_with_default(obj: Dict[str, Any], key: str, default: bool) -> bool:

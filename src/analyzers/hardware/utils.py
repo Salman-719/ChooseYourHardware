@@ -68,10 +68,14 @@ def validate_util_fraction(val: Any, name: str) -> float:
     return float(val)
 
 
-def resolve_utils(defaults: Dict[str, Any] | None) -> Dict[str, float]:
-    """Resolve utilization fractions; all four must be provided explicitly."""
-    if defaults is None:
-        raise ValidationError("defaults must include utilization fractions for fp32/fp16/bf16/int8.")
+def resolve_utils(spec: Dict[str, Any]) -> Dict[str, float]:
+    """Resolve utilization fractions from a device spec.
+
+    Previously all four utilizations were required. To support roofline-based
+    throughput without user-provided utilizations, missing entries now default
+    to 1.0 (i.e., no down-scaling from peak). Provided values are still
+    validated to be in [0, 1].
+    """
     mapping = {
         "sustained_utilization_fraction_fp32": "fp32",
         "sustained_utilization_fraction_fp16": "fp16",
@@ -79,14 +83,11 @@ def resolve_utils(defaults: Dict[str, Any] | None) -> Dict[str, float]:
         "sustained_utilization_fraction_int8": "int8",
     }
     util: Dict[str, float] = {}
-    missing = []
     for key, target in mapping.items():
-        if key not in defaults:
-            missing.append(key)
+        if key not in spec:
+            util[target] = 1.0
             continue
-        util[target] = validate_util_fraction(defaults[key], key)
-    if missing:
-        raise ValidationError(f"Missing utilization fractions: {', '.join(missing)}.")
+        util[target] = validate_util_fraction(spec[key], key)
     return util
 
 

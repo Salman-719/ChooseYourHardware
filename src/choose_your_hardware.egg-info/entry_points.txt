@@ -1,0 +1,3 @@
+[console_scripts]
+analyze-hardware = cli.hardware_cli:cli_entry
+analyze-model = cli.model_cli:cli_entry

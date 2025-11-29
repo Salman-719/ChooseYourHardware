@@ -11,22 +11,57 @@ ValidationError = ValueError
 
 
 def analyze_llm_decoder(
-    config: Dict[str, Any], dtype_bits: int, dtype_bytes: int, batch_size: int, seq_length: int
+    config: Dict[str, Any] | None,
+    dtype_bits: int,
+    dtype_bytes: int,
+    batch_size: int,
+    seq_length: int,
+    llm_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    llm_cfg = require_dict(config.get("llm_config"), "llm_config")
-    num_layers = require_int(llm_cfg, "num_layers", positive=True)
-    hidden_size = require_int(llm_cfg, "hidden_size", positive=True)
-    ffn_size = require_int(llm_cfg, "ffn_size", positive=True)
-    num_heads = require_int(llm_cfg, "num_heads", positive=True)
+    # Prefer explicit metadata; fall back to llm_config/model_level within config.
+    llm_cfg_raw = None
+    if llm_metadata is not None:
+        llm_cfg_raw = llm_metadata
+    elif config is not None:
+        llm_cfg_raw = config.get("llm_config") or config.get("model_level")
+
+    if llm_cfg_raw is None:
+        raise ValidationError("llm_decoder requires llm_metadata or llm_config/model_level.")
+
+    llm_cfg = require_dict(llm_cfg_raw, "llm_metadata")
+
+    def _require_int_fallback(cfg: Dict[str, Any], primary: str, fallback: str | None = None) -> int:
+        if primary in cfg:
+            return require_int(cfg, primary, positive=True)
+        if fallback and fallback in cfg:
+            return require_int(cfg, fallback, positive=True)
+        raise ValidationError(f"Missing required field: {primary}" + (f" or {fallback}" if fallback else ""))
+
+    num_layers = _require_int_fallback(llm_cfg, "num_layers")
+    hidden_size = _require_int_fallback(llm_cfg, "hidden_size", "hidden_dim")
+    ffn_size = _require_int_fallback(llm_cfg, "ffn_size")
+    num_heads = _require_int_fallback(llm_cfg, "num_heads")
     if hidden_size % num_heads != 0:
         raise ValidationError("hidden_size must be divisible by num_heads.")
-    vocab_size = require_int(llm_cfg, "vocab_size", positive=True)
-    max_seq_len = require_int(llm_cfg, "max_sequence_length", positive=True)
-    use_bias = require_bool(llm_cfg, "use_bias")
-    use_layernorm = require_bool(llm_cfg, "use_layernorm")
-    include_embeddings = require_bool(llm_cfg, "include_embeddings")
-    include_pos_embeddings = require_bool(llm_cfg, "include_positional_embeddings")
-    include_kv_cache = require_bool(llm_cfg, "include_kv_cache")
+    vocab_size = _require_int_fallback(llm_cfg, "vocab_size")
+    if "max_context_tokens" in llm_cfg:
+        max_seq_len = require_int(llm_cfg, "max_context_tokens", positive=True)
+    elif "max_sequence_length" in llm_cfg:
+        max_seq_len = require_int(llm_cfg, "max_sequence_length", positive=True)
+    else:
+        raise ValidationError("llm_decoder must specify max_context_tokens or max_sequence_length.")
+    use_bias = require_bool(llm_cfg, "use_bias") if "use_bias" in llm_cfg else False
+    use_layernorm = require_bool(llm_cfg, "use_layernorm") if "use_layernorm" in llm_cfg else True
+    include_embeddings = require_bool(llm_cfg, "include_embeddings") if "include_embeddings" in llm_cfg else True
+    include_pos_embeddings = require_bool(llm_cfg, "include_positional_embeddings") if "include_positional_embeddings" in llm_cfg else True
+    kv_flag = llm_cfg.get("uses_kv_cache") if "uses_kv_cache" in llm_cfg else llm_cfg.get("include_kv_cache")
+    if kv_flag is None:
+        raise ValidationError("llm_decoder must specify uses_kv_cache/include_kv_cache.")
+    if not isinstance(kv_flag, bool):
+        raise ValidationError("uses_kv_cache/include_kv_cache must be boolean.")
+    include_kv_cache = kv_flag
+    if seq_length > max_seq_len:
+        raise ValidationError("sequence_length must be <= max_context_tokens for llm_decoder.")
 
     d_head = hidden_size // num_heads
     param_count = 0
@@ -165,7 +200,6 @@ def analyze_llm_decoder(
             "activation_elements_sum": activation_elements,
             "activation_peak_elements": activation_peak_elements,
             "activation_peak_bytes": activation_peak_bytes,
-            "layers": layer_details,
         },
         "kv_cache_bytes": kv_cache_bytes,
         "has_kv_cache": has_kv_cache,

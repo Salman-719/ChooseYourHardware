@@ -1,0 +1,305 @@
+import asyncio
+import json
+import logging
+import os
+from pathlib import Path
+from typing import List
+from urllib.parse import urljoin
+
+import httpx
+from openai import OpenAI
+
+from config.settings import get_settings
+from metadata_extractor.services.hardware_models import HardwareRecord
+from metadata_extractor.services.hardware_store import upsert_hardware
+
+logger = logging.getLogger(__name__)
+
+settings = get_settings()
+
+OPENAI_API_KEY = settings.openai_api_key
+OPENAI_LLM_MODEL = settings.openai_model
+HARDWARE_LLM_MODEL = os.getenv("HARDWARE_LLM_MODEL")
+HARDWARE_FEED_URL = os.getenv("HARDWARE_FEED_URL", "https://example.com")
+HARDWARE_FEED_FILE = os.getenv("HARDWARE_FEED_FILE")
+HARDWARE_CRAWL_INTERVAL_SECONDS = int(os.getenv("HARDWARE_CRAWL_INTERVAL_SECONDS", "3600"))
+HARDWARE_MAX_ITEMS = int(os.getenv("HARDWARE_MAX_ITEMS", "20"))
+
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+
+def _read_prompt(filename: str) -> str:
+    path = PROMPTS_DIR / filename
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        logger.warning("Prompt file missing: %s", path)
+        return ""
+
+
+HARDWARE_CRAWLER_PROMPT = _read_prompt("hardware_crawler_prompt.txt")
+LINK_DISCOVERY_PROMPT = _read_prompt("link_discovery_prompt.txt")
+REPAIR_PROMPT = _read_prompt("repair_prompt.txt")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+_crawler_task: asyncio.Task | None = None
+
+
+async def _get_with_retries(url: str, max_attempts: int = 5, backoff_seconds: float = 5.0) -> str:
+    """
+    Fetch a URL with simple retry/backoff to handle occasional 429s.
+    """
+    headers = {"User-Agent": "ChooseYourHardwareCrawler/1.0 (+https://example.com)"}
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with httpx.AsyncClient(timeout=15.0, headers=headers) as http:
+                resp = await http.get(url)
+                resp.raise_for_status()
+                return resp.text
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if attempt == max_attempts:
+                break
+            await asyncio.sleep(backoff_seconds * attempt)
+    if last_error:
+        raise last_error
+    raise RuntimeError("Failed to fetch URL without specific error")
+
+
+def _clean_json_text(raw_text: str) -> str:
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = text[3:]
+        text = text.strip()
+        if text.lower().startswith("json"):
+            text = text[4:]
+            text = text.strip()
+        if text.endswith("```"):
+            text = text[:-3].strip()
+    return text
+
+
+def _extract_power_w(spec: dict[str, object]) -> float | None:
+    for key in ("power_consumption_w", "tdp_w", "tdp", "tdp_watts", "power_watts", "power_limit_w"):
+        if key not in spec:
+            continue
+        try:
+            value = float(spec.get(key) or 0)
+            if value > 0:
+                return value
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def _fallback_links_from_html(feed_html: str, source_url: str, max_links: int = 5) -> List[str]:
+    """
+    Simple regex fallback to pull GPU detail links when the LLM fails to propose any.
+    """
+    import re
+
+    hrefs = re.findall(r'href="([^"]+gpu-specs[^"]+)"', feed_html, flags=re.IGNORECASE)
+    links: List[str] = []
+    for href in hrefs:
+        full = urljoin(source_url, href.strip())
+        if full not in links:
+            links.append(full)
+        if len(links) >= max_links:
+            break
+    return links
+
+
+async def _fetch_feed() -> str:
+    if HARDWARE_FEED_FILE:
+        try:
+            return Path(HARDWARE_FEED_FILE).read_text(encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to read HARDWARE_FEED_FILE %s: %s", HARDWARE_FEED_FILE, exc)
+    # Fall back to network fetch.
+    return await _get_with_retries(HARDWARE_FEED_URL)
+
+
+async def _fetch_page(url: str) -> str:
+    return await _get_with_retries(url)
+
+
+async def _discover_links(feed_html: str, source_url: str, max_links: int = 10) -> List[str]:
+    """
+    Ask the model to propose which links to follow from the feed page.
+    Falls back to a regex extraction if the model yields nothing.
+    """
+    prompt = LINK_DISCOVERY_PROMPT.format(
+        source_url=source_url,
+        max_links=max_links,
+        html=feed_html[:80000],
+    )
+    response = client.responses.create(
+        model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
+        input=prompt,
+    )
+    links: List[str] = []
+    try:
+        parsed = json.loads(response.output_text)
+        for raw in parsed if isinstance(parsed, list) else []:
+            if not isinstance(raw, str):
+                continue
+            full = urljoin(source_url, raw.strip())
+            if full and full not in links:
+                links.append(full)
+    except json.JSONDecodeError:
+        links = []
+
+    if not links:
+        links = _fallback_links_from_html(feed_html, source_url, max_links=max_links)
+
+    logger.info("Link discovery produced %d links", len(links))
+    return links
+
+
+async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[HardwareRecord]:
+    """
+    Ask the model to pull structured hardware items out of the HTML feed using the shared prompt.
+    """
+    prompt = HARDWARE_CRAWLER_PROMPT.format(
+        source_url=source_url,
+        html=feed_html[:120000],
+    )
+    response = client.responses.create(
+        model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
+        input=prompt,
+    )
+    if not response.output_text:
+        logger.warning("LLM returned empty output for hardware extraction")
+        return []
+
+    raw_text = _clean_json_text(response.output_text or "")
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError:
+        logger.warning("LLM output is not valid JSON (truncated): %s", raw_text[:500])
+
+        # Quick salvage: try to slice the first JSON array present.
+        start = raw_text.find("[")
+        end = raw_text.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            try:
+                parsed = json.loads(raw_text[start : end + 1])
+            except json.JSONDecodeError:
+                parsed = None
+        else:
+            parsed = None
+
+        if parsed is None:
+            # Attempt repair once
+            repair_prompt = REPAIR_PROMPT.format(raw=raw_text[:4000])
+            repair_resp = client.responses.create(
+                model=HARDWARE_LLM_MODEL or OPENAI_LLM_MODEL,
+                input=repair_prompt,
+            )
+            repair_text = _clean_json_text(repair_resp.output_text or "")
+            try:
+                parsed = json.loads(repair_text)
+            except json.JSONDecodeError:
+                # Last attempt: try to slice the first JSON array found.
+                start = repair_text.find("[")
+                end = repair_text.rfind("]")
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        parsed = json.loads(repair_text[start : end + 1])
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Repair attempt failed; skipping batch. Repair output (truncated): %s",
+                            repair_resp.output_text[:500],
+                        )
+                        return []
+                else:
+                    logger.warning(
+                        "Repair attempt failed; skipping batch. Repair output (truncated): %s",
+                        repair_resp.output_text[:500],
+                    )
+                    return []
+
+    if not isinstance(parsed, list):
+        logger.warning("LLM output is not a list; skipping. Raw (truncated): %s", str(parsed)[:500])
+        return []
+
+    items: List[HardwareRecord] = []
+    skipped = 0
+    for raw in parsed if isinstance(parsed, list) else []:
+        try:
+            record = HardwareRecord.model_validate(
+                {
+                    **raw,
+                    "url": raw.get("url") or raw.get("link"),
+                    "source": raw.get("source") or source_url,
+                }
+            )
+            power_w = _extract_power_w(record.spec)
+            if power_w is not None:
+                # Normalize power key for downstream filtering.
+                record.spec["power_consumption_w"] = power_w
+            items.append(record)
+        except Exception as exc:  # noqa: BLE001
+            skipped += 1
+            logger.debug("Skipping invalid hardware item: %s", exc)
+            continue
+    if skipped:
+        logger.info("Parsed %s items; skipped %s due to validation", len(items), skipped)
+    return items
+
+
+async def crawl_once() -> int:
+    """
+    Fetch the trusted feed, ask the agent to extract items, and upsert into the DB.
+    Returns the count of newly inserted rows.
+    """
+    try:
+        html = await _fetch_feed()
+        detail_links = await _discover_links(html, HARDWARE_FEED_URL, max_links=10)
+        detail_html = ""
+        for link in detail_links:
+            try:
+                await asyncio.sleep(1.0)
+                detail_html += f"\n\n<!-- PAGE {link} -->\n"
+                detail_html += await _fetch_page(link)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Failed to fetch detail page %s: %s", link, exc)
+                continue
+        combined_html = html + "\n\n" + detail_html
+        items = await _extract_items_from_feed(combined_html, HARDWARE_FEED_URL)
+        inserted = upsert_hardware(items)
+        logger.info("Hardware crawl finished: %s items parsed, %s inserted", len(items), inserted)
+        return inserted
+    except Exception as exc:
+        logger.exception("Hardware crawl failed: %s", exc)
+        return 0
+
+
+async def _run_periodic_crawl(interval_seconds: int) -> None:
+    while True:
+        await crawl_once()
+        await asyncio.sleep(interval_seconds)
+
+
+def start_periodic_crawl(interval_seconds: int | None = None) -> None:
+    """
+    Launch the background crawler loop if not already running.
+    """
+    global _crawler_task
+    if _crawler_task and not _crawler_task.done():
+        return
+    interval = interval_seconds or HARDWARE_CRAWL_INTERVAL_SECONDS
+    _crawler_task = asyncio.create_task(_run_periodic_crawl(interval))
+
+
+async def stop_periodic_crawl() -> None:
+    global _crawler_task
+    if _crawler_task:
+        _crawler_task.cancel()
+        try:
+            await _crawler_task
+        except asyncio.CancelledError:
+            pass
+        _crawler_task = None

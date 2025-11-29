@@ -15,10 +15,11 @@ Your task:
    - For layer_summary: check if there are layer objects with name, type, output_shape, and params filled.
    - For output_shape: [null, ...] is VALID (null represents batch dimension).
 
-2. Missing Fields:
+2. Missing Fields and Answring Questions:
    - If ANY required field is truly missing or null:
         • Set `"filled": false`
-        • Set `"follow_up_question"` to exactly ONE comprehensive question that asks about ALL remaining missing fields at once.
+        • If the user's latest message is a question, you MUST first respond to their question and then immediately ask ONE comprehensive question about ALL remaining missing fields. Save the full combined string (your answer + your question) in `"follow_up_question"`.
+        • Otherwise, set `"follow_up_question"` to exactly ONE comprehensive question that asks about ALL remaining missing fields at once.
         • PRIORITY ORDER for questions (ask about these first if missing):
           a) usage_constraints: batch_size, target_latency_s
           b) model_level: input_shape, precision, total_params, trainable_params, non_trainable_params, framework, model_type
@@ -42,6 +43,12 @@ STRICT RULES:
 - No explanations, no extra text, no commentary.
 - You MUST preserve JSON format exactly.
 
+Your last message was: 
+{}
+
+The user's last input was:
+{}
+
 An example of the JSON schema you must fill is:
 {}
 DO NOT copy this. Just copy the fields and fill them thrugh user input. Unfilled fields are to be filled with `null`.
@@ -49,4 +56,5 @@ DO NOT copy this. Just copy the fields and fill them thrugh user input. Unfilled
 The CURRENT_JSON_STATE is:
 {}
 
-Now update `filled` and `follow_up_question` accordingly and output the entire state including them.
+Now update `filled` and `follow_up_question` accordingly and output the entire state including them. Remember to answer the user's question if he has any BEFORE you ask for more information.
+Also, remember to set filled to true if all information in the JSON are filled.

@@ -9,10 +9,29 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from utils.validators import require_int, require_positive_number
-from utils.converters import apply_utilization as apply_util, gb_to_bytes, tflops_to_flops, tops_to_ops
-from analyzers.hardware.utils import normalize_latency_seconds, ValidationError
+from utils.converters import gb_to_bytes, tflops_to_flops, tops_to_ops
+from analyzers.hardware.utils import normalize_latency_seconds, ValidationError, resolve_utils
 
 DTYPE_MAP = {"fp32": 32, "fp16": 16, "bf16": 16, "int8": 8}
+COMPLEXITY_BY_KIND = {
+    "cpu_node": 1,
+    "gpu": 1,
+    "tpu": 1,
+    "accelerator": 1,
+    "jetson": 1,
+    "soc": 1,
+    "multi_gpu_node": 2,
+    "cluster": 3,
+}
+
+
+def _extract_metadata(spec: Dict[str, Any], kind: str) -> Dict[str, Any]:
+    return {
+        "cost_usd_per_hour": spec.get("cost_usd_per_hour"),
+        "region": spec.get("region"),
+        "provider": spec.get("provider"),
+        "complexity_score": COMPLEXITY_BY_KIND.get(kind),
+    }
 
 
 def _gpu_peak_from_sms(spec: Dict[str, Any]) -> float:
@@ -91,8 +110,8 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
     if supports_int8 and peak_ops["int8"] is None:
         raise ValidationError("supports_int8 is true but no peak_int8_tops provided.")
     dtype_support = {k: (v is not None) for k, v in {**peak_flops, **peak_ops}.items()}
-    sustained_flops = {"fp32": apply_util(peak_flops["fp32"], utils["fp32"]), "fp16": None, "bf16": None}
-    sustained_ops = {"int8": None}
+    sustained_flops = {"fp32": peak_flops["fp32"], "fp16": peak_flops["fp16"], "bf16": peak_flops["bf16"]}
+    sustained_ops = {"int8": peak_ops["int8"]}
 
     total_threads = num_sockets * cores_per_socket * threads_per_core
 
@@ -113,6 +132,8 @@ def analyze_cpu_node(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str,
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": l3_cache_bytes,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
 
 
@@ -130,8 +151,8 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         "bf16": tflops_to_flops(peak_bf16_tflops),
     }
     peak_ops = {"int8": tops_to_ops(peak_int8_tops)}
-    sustained_flops = {k: apply_util(v, utils[k]) for k, v in peak_flops.items()}
-    sustained_ops = {"int8": apply_util(peak_ops["int8"], utils["int8"])}
+    sustained_flops = peak_flops
+    sustained_ops = peak_ops
 
     vram_capacity_gb = require_positive_number(spec, "vram_capacity_gb")
     vram_capacity_bytes = gb_to_bytes(vram_capacity_gb)
@@ -180,6 +201,8 @@ def analyze_gpu(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": None,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
 
 
@@ -218,8 +241,8 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
     peak_flops = {"fp32": peak_fp32_flops, "fp16": peak_fp16_flops, "bf16": peak_bf16_flops}
     peak_ops = {"int8": peak_int8_ops}
     dtype_support = {k: (v is not None) for k, v in {**peak_flops, **peak_ops}.items()}
-    sustained_flops = {k: apply_util(v, utils[k]) for k, v in peak_flops.items()}
-    sustained_ops = {"int8": apply_util(peak_ops["int8"], utils["int8"])}
+    sustained_flops = peak_flops
+    sustained_ops = peak_ops
 
     return {
         "dtype_support": dtype_support,
@@ -238,6 +261,8 @@ def analyze_accelerator(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[s
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": None,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
 
 
@@ -272,8 +297,10 @@ def sum_ops_dict(a: Dict[str, Optional[float]], b: Dict[str, Optional[float]]) -
 def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, Any]:
     if "cpu" not in spec or "gpu" not in spec:
         raise ValidationError("Jetson/soc spec must include 'cpu' and 'gpu' blocks.")
-    cpu_norm = analyze_cpu_node(spec["cpu"], utils)
-    gpu_norm = analyze_gpu(spec["gpu"], utils)
+    cpu_utils = resolve_utils(spec["cpu"])
+    gpu_utils = resolve_utils(spec["gpu"])
+    cpu_norm = analyze_cpu_node(spec["cpu"], cpu_utils)
+    gpu_norm = analyze_gpu(spec["gpu"], gpu_utils)
 
     ram_capacity_gb = require_positive_number(spec, "ram_capacity_gb")
     ram_bytes = gb_to_bytes(ram_capacity_gb)
@@ -288,8 +315,8 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
     dtype_support = merge_dtype_support(cpu_norm["dtype_support"], gpu_norm["dtype_support"])
     peak_flops = sum_flops_dict(cpu_norm["peak_flops_per_s"], gpu_norm["peak_flops_per_s"])
     peak_ops = sum_ops_dict(cpu_norm["peak_ops_per_s"], gpu_norm["peak_ops_per_s"])
-    sustained_flops = {k: apply_util(peak_flops[k], utils[k]) for k in ["fp32", "fp16", "bf16"]}
-    sustained_ops = {"int8": apply_util(peak_ops["int8"], utils["int8"])}
+    sustained_flops = peak_flops
+    sustained_ops = peak_ops
 
     # Shared memory pool; represent as both ram and vram.
     return {
@@ -312,4 +339,6 @@ def analyze_jetson(spec: Dict[str, Any], utils: Dict[str, float]) -> Dict[str, A
         "dram_latency_s": dram_latency_s,
         "cache_latency_s": cache_latency_s,
         "l3_cache_bytes": l3_cache_bytes,
+        "cost_usd": spec.get("cost_usd"),
+        "power_w": spec.get("power_w"),
     }
