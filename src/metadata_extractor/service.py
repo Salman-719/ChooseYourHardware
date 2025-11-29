@@ -55,7 +55,6 @@ class MetadataExtractor:
             Extraction response with updated metadata and next question
         """
         try:
-            print("n\\\n\n\n\n\nfetna\n\n\n\n\n")
             classical_models = {"knn", "kmeans", "tree", "random_forest", "gradient_boosted_trees"}
             if request.model_type in classical_models:
                 def ensure_base_state(template: Dict[str, Any], current: Dict[str, Any] | None) -> Dict[str, Any]:
@@ -158,7 +157,6 @@ class MetadataExtractor:
             model_fields["filled"] = False
             model_fields["follow_up_question"] = "null"
 
-            print("n\\\n\n\n\n\nfetna2\n\n\n\n\n")
             # Get allowed layers for the model type
             allowed_layers = self.layer_types.get(request.model_type) or self.layer_types.get("all_layers") or []
 
@@ -167,7 +165,6 @@ class MetadataExtractor:
             last_question = request.last_question or "null"
             user_input = request.user_input or "null"
 
-            print("n\\\n\n\n\n\nfetna3\n\n\n\n\n")
             # Update step: incorporate user's response
             if user_input != "null":
                 if self.client is None:
@@ -191,7 +188,6 @@ class MetadataExtractor:
                     raise ValueError("Empty response from LLM in update step")
                 current_state = json.loads(content)
 
-            print("n\\\n\n\n\n\nfetna4\n\n\n\n\n")
             # Ask step: determine next question
             formatted_prompt = self.asker_prompt.format(
                 last_question,
@@ -203,8 +199,6 @@ class MetadataExtractor:
             if self.client is None:
                 raise ValueError("OPENAI_API_KEY is required for metadata extraction.")
 
-            print("n\\\n\n\n\n\nfetna5\n\n\n\n\n")
-            print(f"n\\\n\n{formatted_prompt}\n\n\n\n\n\n\n")
             response = await self.client.chat.completions.create(
                 model=self.model,
                 # Use system role to enforce answering user question before asking follow-ups
@@ -212,7 +206,6 @@ class MetadataExtractor:
                 temperature=0.0
             )
             
-            print("\n\n\RRRR:\n\n", response, "\n\n\n")
             content = response.choices[0].message.content
             if content is None:
                 raise ValueError("Empty response from LLM in ask step")

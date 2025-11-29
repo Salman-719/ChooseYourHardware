@@ -18,6 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
+COPY device_data/ ./device_data/
 COPY src/ ./src/
 COPY pyproject.toml ./
 

@@ -1,0 +1,110 @@
+{
+  "usage_constraints": {
+    "batch_size": 8,
+    "target_latency_s": 0.1,
+    "max_cost_usd": 100000,
+    "max_power_w": 50
+  },
+  "model_level": {
+    "input_shape": [3, 320, 320],
+    "precision": "fp32",
+    "total_params": 539584,
+    "trainable_params": 539584,
+    "non_trainable_params": 0,
+    "framework": "tflite",
+    "model_type": "detector",
+    "is_XLA": false
+  },
+  "layer_summary": [
+    {
+      "name": "conv1",
+      "type": "Conv2D",
+      "output_shape": [null, 32, 160, 160],
+      "params": 896
+    },
+    {
+      "name": "bn1",
+      "type": "BatchNormalization",
+      "output_shape": [null, 32, 160, 160],
+      "params": 64
+    },
+    {
+      "name": "conv2",
+      "type": "Conv2D",
+      "output_shape": [null, 64, 80, 80],
+      "params": 18496
+    },
+    {
+      "name": "bn2",
+      "type": "BatchNormalization",
+      "output_shape": [null, 64, 80, 80],
+      "params": 128
+    },
+    {
+      "name": "maxpool",
+      "type": "MaxPool2D",
+      "output_shape": [null, 64, 40, 40],
+      "params": 0
+    },
+    {
+      "name": "backbone_block1",
+      "type": "Layer",
+      "output_shape": [null, 128, 40, 40],
+      "params": 50000
+    },
+    {
+      "name": "backbone_block2",
+      "type": "Layer",
+      "output_shape": [null, 256, 20, 20],
+      "params": 50000
+    },
+    {
+      "name": "backbone_block3",
+      "type": "Layer",
+      "output_shape": [null, 256, 20, 20],
+      "params": 50000
+    },
+    {
+      "name": "backbone_block4",
+      "type": "Layer",
+      "output_shape": [null, 512, 10, 10],
+      "params": 80000
+    },
+    {
+      "name": "backbone_block5",
+      "type": "Layer",
+      "output_shape": [null, 512, 10, 10],
+      "params": 80000
+    },
+    {
+      "name": "fpn_block1",
+      "type": "Layer",
+      "output_shape": [null, 128, 40, 40],
+      "params": 60000
+    },
+    {
+      "name": "fpn_block2",
+      "type": "Layer",
+      "output_shape": [null, 128, 20, 20],
+      "params": 60000
+    },
+    {
+      "name": "det_head_small",
+      "type": "Layer",
+      "output_shape": [null, 9, 40, 40],
+      "params": 30000
+    },
+    {
+      "name": "det_head_medium",
+      "type": "Layer",
+      "output_shape": [null, 9, 20, 20],
+      "params": 30000
+    },
+    {
+      "name": "det_head_large",
+      "type": "Layer",
+      "output_shape": [null, 9, 10, 10],
+      "params": 30000
+    }
+  ]
+}
