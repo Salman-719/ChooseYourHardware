@@ -25,6 +25,7 @@ HARDWARE_FEED_FILE = os.getenv("HARDWARE_FEED_FILE")
 HARDWARE_CRAWL_INTERVAL_SECONDS = int(os.getenv("HARDWARE_CRAWL_INTERVAL_SECONDS", "3600"))
 HARDWARE_MAX_ITEMS = int(os.getenv("HARDWARE_MAX_ITEMS", "20"))
 HARDWARE_LOG_FILE = os.getenv("HARDWARE_LOG_FILE")
+HARDWARE_DB_PATH = os.getenv("HARDWARE_DB_PATH")
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -70,10 +71,38 @@ def _maybe_attach_file_logger() -> None:
     logger.info("File logging enabled at %s", log_path)
 
 
+def _ensure_console_logger() -> None:
+    """Attach a console handler when none are present so logs always show up in stdout."""
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
 def _log_llm_io(stage: str, content: str, limit: int = 1000) -> None:
     """Log LLM input/output with length and a safe preview."""
     preview = (content[:limit] + "...") if len(content) > limit else content
     logger.info("%s len=%s preview=%r", stage, len(content), preview)
+
+
+def _log_settings_snapshot() -> None:
+    """Emit a one-time snapshot of key crawler settings for debugging."""
+    logger.info(
+        "Crawler settings: feed_url=%s feed_file=%s llm_model=%s hw_llm_model=%s db_path=%s max_items=%s",
+        HARDWARE_FEED_URL,
+        HARDWARE_FEED_FILE,
+        OPENAI_LLM_MODEL,
+        HARDWARE_LLM_MODEL,
+        HARDWARE_DB_PATH,
+        HARDWARE_MAX_ITEMS,
+    )
 
 def _log_html(stage: str, html: str, limit: int = 4000) -> None:
     """Log HTML length with a trimmed preview to avoid huge log lines."""
@@ -167,14 +196,17 @@ def _fallback_links_from_html(feed_html: str, source_url: str, max_links: int = 
 async def _fetch_feed() -> str:
     if HARDWARE_FEED_FILE:
         try:
+            logger.info("Reading feed HTML from file %s", HARDWARE_FEED_FILE)
             return Path(HARDWARE_FEED_FILE).read_text(encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to read HARDWARE_FEED_FILE %s: %s", HARDWARE_FEED_FILE, exc)
     # Fall back to network fetch.
+    logger.info("Fetching feed HTML from %s", HARDWARE_FEED_URL)
     return await _get_with_retries(HARDWARE_FEED_URL)
 
 
 async def _fetch_page(url: str) -> str:
+    logger.debug("Fetching detail page %s", url)
     return await _get_with_retries(url)
 
 
@@ -219,10 +251,11 @@ async def _discover_links(feed_html: str, source_url: str, max_links: int = 10) 
         links = []
 
     if not links:
+        logger.info("LLM did not yield links; falling back to regex extraction")
         links = _fallback_links_from_html(feed_html, source_url, max_links=max_links)
 
     limited = links[: max_links or 1]
-    logger.info("Link discovery produced %d links (limited to %d)", len(limited), max_links or 1)
+    logger.info("Link discovery produced %d links (limited to %d): %s", len(limited), max_links or 1, limited)
     return limited
 
 
@@ -332,11 +365,14 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
 
 async def crawl_once() -> int:
     """
-    Fetch the trusted feed, ask the agent to extract items, and write them into device_data.
-    Returns the count of newly created files.
+    Fetch the trusted feed, ask the agent to extract items, and upsert into the DB.
+    Returns the count of newly inserted rows.
     """
     try:
+        _ensure_console_logger()
+        _log_settings_snapshot()
         html = await _fetch_feed()
+        logger.info("Feed HTML length=%s", len(html))
         detail_links = await _discover_links(html, HARDWARE_FEED_URL, max_links=10)
         detail_html = ""
         for link in detail_links:
@@ -350,10 +386,18 @@ async def crawl_once() -> int:
                 logger.debug("Failed to fetch detail page %s: %s", link, exc)
                 continue
         combined_html = html + "\n\n" + detail_html
+        logger.info("Combined HTML length=%s", len(combined_html))
         items = await _extract_items_from_feed(combined_html, HARDWARE_FEED_URL)
-        written = upsert_hardware(items)
-        logger.info("Hardware crawl finished: %s items parsed, %s written to device_data", len(items), written)
-        return written
+        logger.info("Attempting to upsert %s parsed items into device_data", len(items))
+        inserted = upsert_hardware(items)
+        logger.info(
+            "Hardware crawl finished: %s items parsed, %s written to device_data",
+            len(items),
+            inserted,
+        )
+        if inserted == 0:
+            logger.warning("Crawl completed but inserted=0; check LLM output validity and file permissions")
+        return inserted
     except Exception as exc:
         logger.exception("Hardware crawl failed: %s", exc)
         return 0

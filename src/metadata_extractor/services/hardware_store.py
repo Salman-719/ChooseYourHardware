@@ -52,12 +52,16 @@ def upsert_hardware(items: Iterable[HardwareItem]) -> int:
             "url": record.url,
             "price": record.price,
             "source": record.source,
-            "discovered_at": getattr(record, "discovered_at", None) or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "discovered_at": getattr(record, "discovered_at", None)
+            or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         }
         try:
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             if was_new:
                 inserted += 1
+                logger.info("Wrote new hardware file %s", path.name)
+            else:
+                logger.debug("Updated existing hardware file %s", path.name)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to write hardware file %s: %s", path, exc)
             continue
