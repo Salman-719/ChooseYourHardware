@@ -4,64 +4,67 @@
 
 ## 🎯 Overview
 
-ChooseYourHardware is a functional prototype system that helps ML engineers and researchers select the best hardware for deploying machine learning models. It combines analytical modeling of ML workloads with intelligent hardware matching to provide latency estimates, bottleneck analysis, and cost-effective recommendations.
+ChooseYourHardware is a system that helps ML engineers and researchers select the fitting hardware for deploying machine learning models. It combines analytical modeling of ML workloads with intelligent hardware matching to provide latency estimates, bottleneck analysis, and cost-effective recommendations.
 
-**Status**: v1.0.0 - MVP deployed and functional, validation against real hardware measurements pending.
+**Status**: v1.0.0 - Research prototype with cloud deployment capabilities. Latency estimates are analytical predictions based on theoretical models and have not been validated against real hardware measurements.
 
 **Live Demo:**
 - Frontend: https://easyware.web.app
 - Backend API: https://chooseyourhardware-rhen2vww6a-uc.a.run.app
 - API Documentation: https://chooseyourhardware-rhen2vww6a-uc.a.run.app/docs
 
+**⚠️ Important Note**: This is an academic research project. Latency predictions are theoretical and should be validated against actual hardware before making production decisions.
+
 ### Key Capabilities
 
 - **Model Analysis**: Calculate FLOPs, memory requirements, and activation sizes for ML models
   - Classical ML: KNN, K-Means, Decision Trees, Random Forest, Gradient Boosted Trees
-  - Neural Networks: CNNs, Transformers, LLMs (with KV cache and per-token decode analysis)
+  - Neural Networks: Layer-by-layer analysis for general neural architectures
+  - Transformers & LLMs: Support for transformer models with attention mechanisms
   - Multi-precision support: FP32, FP16, BF16, INT8
 
 - **Hardware Analysis**: Normalize and evaluate device specifications
-  - Device types: CPUs, GPUs, TPUs, accelerators, Jetson SoCs, clusters
+  - Device types: CPUs, GPUs, TPUs, accelerators, Jetson
   - Performance metrics: FLOPS, memory bandwidth, latency characteristics
-  - Constraint validation: Power limits, cost budgets, edge device requirements
+  - Specification normalization from various device spec formats
 
-- **Intelligent Matching**: Scenario-aware latency estimation
-  - Bottleneck detection: Compute-bound vs memory-bound vs latency-bound
-  - Dtype feasibility: Automatic precision selection based on hardware support
-  - Constraint filtering: Budget, power consumption, XLA compatibility
+- **Intelligent Matching**: Analytical latency estimation
+  - Bottleneck detection: Compute-bound vs memory-bound analysis
+  - Dtype feasibility: Precision selection based on hardware support
+  - Constraint filtering: Budget, power consumption, compatibility checks
 
 - **LLM-Powered Features**:
   - **Metadata Extractor**: Conversational interface to extract model specs from free-form descriptions
   - **Hardware Crawler**: Automated extraction of device specs from HTML catalogs
 
 - **Multiple Interfaces**:
-  - **Web UI**: Conversational chatbot for non-technical users
-  - **REST API**: FastAPI-based service for integration
-  - **CLI Tools**: Command-line interfaces for scripting and automation
+  - **Web UI**: chatbot interface for interactive model analysis
+  - **REST API**: FastAPI-based service for programmatic integration
+  - **CLI Tools**: Command-line interfaces for batch processing
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend (React)                          │
-│  Conversational UI • Hardware Constraints • Results Display     │
+│                   Frontend (React + TypeScript)                  │
+│           Interactive UI • Constraint Input • Results            │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ HTTPS
+                             │ HTTPS/REST API
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   FastAPI Backend (Cloud Run)                    │
 ├─────────────────────────────────────────────────────────────────┤
-│  Model Analyzer          Hardware Analyzer        Matcher        │
-│  ├─ Classical ML         ├─ Normalization        ├─ Latency     │
-│  ├─ Neural Networks      ├─ FLOPS Calculation    ├─ Bottleneck  │
-│  └─ LLMs (KV cache)      └─ Memory Analysis      └─ Filtering   │
+│  Model Analyzers         Hardware Analyzers      Matcher         │
+│  ├─ Classical ML         ├─ Normalization       ├─ Latency      │
+│  ├─ Neural Networks      ├─ FLOPS Calculation   ├─ Bottleneck   │
+│  └─ Transformers         └─ Memory Analysis     └─ Filtering    │
 │                                                                   │
-│  Metadata Extractor              Hardware Crawler                │
-│  ├─ LLM Conversation            ├─ HTML Parsing                 │
-│  ├─ Field Templates             ├─ LLM Extraction               │
-│  └─ Validation                  └─ SQLite Storage               │
+│  Metadata Extractor (Optional - requires OpenAI API key)         │
+│  ├─ LLM Conversation        Hardware Crawler                     │
+│  ├─ Field Templates         ├─ HTML Parsing                     │
+│  └─ Validation              └─ LLM Extraction                   │
 └────────────────────────────┬────────────────────────────────────┘
-                             │
+                             │ (Optional)
                              ▼
                     ┌────────────────┐
                     │  OpenAI GPT    │
@@ -73,47 +76,46 @@ ChooseYourHardware is a functional prototype system that helps ML engineers and 
 
 1. **Analyzers** (`src/analyzers/`)
    - **Model Analyzers**: Compute FLOPs, parameters, activations, and memory requirements
-     - Classical: Deterministic templates for KNN, K-Means, decision trees
-     - Neural: Layer-wise analysis for CNNs, Transformers, LLMs
+     - Classical: Analytical models for KNN, K-Means, decision trees, ensembles
+     - Neural: Layer-wise analysis for neural network architectures
+     - Transformers: Attention mechanism and feed-forward computation analysis
    - **Hardware Analyzers**: Normalize device specs, infer missing fields, validate constraints
 
 2. **Matchers** (`src/matchers/`)
-   - Estimate inference latency based on scenario (single-pass, batch, decode)
-   - Identify bottlenecks: compute, memory bandwidth, or memory latency
-   - Filter devices by hard constraints (cost, power, XLA support)
+   - Estimate inference latency based on analytical models
+   - Identify bottlenecks: compute-bound vs memory-bandwidth-bound
+   - Filter devices by constraints (cost, power, compatibility)
 
-3. **Metadata Extractor** (`src/metadata_extractor/`)
-   - LLM-powered conversational interface for model specification
-   - Two-step prompt flow: update state + ask follow-up questions
-   - Template-based validation for classical models (avoids unnecessary LLM calls)
+3. **Metadata Extractor** (`src/metadata_extractor/`) *(Requires OpenAI API Key)*
+   - LLM-powered conversational interface for model specification extraction
+   - Two-step prompt flow: state update + follow-up questions
+   - Template-based validation for classical models
 
-4. **Hardware Crawler** (`src/metadata_extractor/services/`)
-   - Automated extraction of device specs from HTML catalogs
-   - LLM-based parsing with JSON repair and validation
-   - SQLite storage for hardware catalog
-
-5. **API Endpoints** (`src/api/v1/endpoints/`)
+4. **API Endpoints** (`src/api/v1/endpoints/`)
    - `/models/analyze` - Analyze ML model requirements
    - `/hardware/analyze` - Normalize hardware specifications  
-   - `/metadata/extract` - Interactive metadata extraction
+   - `/metadata/extract` - Interactive metadata extraction (requires OpenAI)
    - `/matcher/best` - Find optimal device for a model
+   - `/hardware/` - List available hardware devices
 
-6. **Frontend** (`Frontend/northlane-partner-hub/`)
+5. **Frontend** (`Frontend/northlane-partner-hub/`)
    - React + TypeScript + Vite
    - Tailwind CSS + shadcn/ui components
-   - Conversational chatbot interface
-   - Constraint collection (budget, power, edge device)
-   - Real-time latency estimates and device recommendations
+   - Interactive interface for model specification and hardware recommendations
+
+6. **CLI Tools** (`src/cli/`)
+   - `analyze-model` - Command-line model analysis
+   - `analyze-hardware` - Command-line hardware analysis
 
 ## 🚀 Quick Start
 
-### Option 1: Use the Web Interface
+### Option 1: Use the Live Web Interface
 
-Visit **https://easyware.web.app** and chat with the assistant about your model and constraints.
+Visit **https://easyware.web.app** to use the interactive web interface for model analysis and hardware selection.
 
-### Option 2: API (For Developers)
+### Option 2: Use the Public API
 
-**Live API**: https://chooseyourhardware-rhen2vww6a-uc.a.run.app
+**API Base URL**: https://chooseyourhardware-rhen2vww6a-uc.a.run.app
 
 ```bash
 # Analyze a transformer model
@@ -123,16 +125,19 @@ curl -X POST https://chooseyourhardware-rhen2vww6a-uc.a.run.app/api/v1/models/an
     "model_json": "{\"model_type\": \"transformer\", \"num_layers\": 12, \"d_model\": 768, \"num_heads\": 12, \"d_ff\": 3072, \"sequence_length\": 512, \"inference_config\": {\"batch_size\": 1}}"
   }'
 
-# Find best hardware match
+# Find best hardware match for a model
 curl -X POST https://chooseyourhardware-rhen2vww6a-uc.a.run.app/api/v1/matcher/best \
   -H "Content-Type: application/json" \
   -d '{
-    "model": {"model_type": "transformer", "num_layers": 12, "d_model": 768, "num_heads": 12, "d_ff": 3072, "sequence_length": 512, "inference_config": {"batch_size": 1}},
+    "model": {"model_type": "transformer", "num_layers\": 12, \"d_model\": 768, \"num_heads\": 12, \"d_ff\": 3072, \"sequence_length\": 512, \"inference_config\": {\"batch_size\": 1}},
     "device_dir": "device_data"
   }'
 
 # List available hardware devices
 curl https://chooseyourhardware-rhen2vww6a-uc.a.run.app/api/v1/hardware/
+
+# View API documentation
+# Visit: https://chooseyourhardware-rhen2vww6a-uc.a.run.app/docs
 ```
 
 ### Option 3: Run Locally
@@ -142,329 +147,371 @@ curl https://chooseyourhardware-rhen2vww6a-uc.a.run.app/api/v1/hardware/
 ### From Source
 
 ```bash
+### Option 3: Run Locally
+
+See the [Installation](#installation) section below for setup instructions.
+
+## Installation
+
+### Prerequisites
+
+- Python 3.9 or higher
+- Git
+- (Optional) OpenAI API key for metadata extraction features
+
+### From Source
+
+```bash
 # Clone the repository
 git clone https://github.com/Salman-719/ChooseYourHardware.git
 cd ChooseYourHardware
 
-# Create virtual environment
+# Create and activate virtual environment
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install package
-pip install -e .
+# Install dependencies
+pip install -r requirements.txt
 
+# Install package in editable mode
+pip install -e .
+```
 
 ### Configuration
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (optional, only needed for LLM features):
 
 ```bash
-# Required for metadata extractor and hardware crawler
+# Optional - Required only for metadata extractor and hardware crawler
 OPENAI_API_KEY=sk-your-key-here
 OPENAI_LLM_MODEL=gpt-4o-mini
 
-# API Configuration (optional)
+# API Configuration (optional, has defaults)
 ENV=development
-API_PORT=8000
 LOG_LEVEL=INFO
 ```
 
-**Note**: The metadata extractor and hardware crawler require an OpenAI API key. Model and hardware analyzers work without it.
+**Note**: The core model and hardware analyzers work without an OpenAI API key. The metadata extractor and hardware crawler features require it.
 
 ## Usage
 
 ### Command Line Interface
 
+The package provides two CLI commands installed via `pip install -e .`:
+
 ```bash
-# Analyze model from JSON file
+# Analyze a model from JSON file
 analyze-model model_config.json
 
-# Analyze hardware specification
+# Analyze hardware specification from JSON file
 analyze-hardware device_spec.json
+
+# Or pipe JSON via stdin
+echo '{"model_type": "knn", ...}' | analyze-model
 ```
 
+**Example Model Configurations:**
+- See `model_config.json` and `model_config1.json` in the project root for examples
+- Hardware device specs are in `device_data/` directory
 
-### REST API
+### REST API (Local Development)
 
-Start the API server:
+Start the API server locally:
 
 ```bash
-# Using Python module
-python -m api.main
+# Using uvicorn directly (recommended for development)
+uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 
-# Or using uvicorn directly
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+# Or using Python module
+python -m src.api.main
 ```
 
 The API will be available at `http://localhost:8000`
 
-#### API Endpoints
+**Interactive API Documentation:**
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
+**Core API Endpoints:**
 - `GET /health` - Health check
-- `GET /docs` - Interactive API documentation (Swagger UI)
 - `POST /api/v1/models/analyze` - Analyze ML model requirements
-- `POST /api/v1/hardware/analyze` - Analyze hardware specification
-- `POST /api/v1/metadata/extract` - Interactive metadata extraction
-- `POST /api/v1/matcher/best` - Find best hardware match
+- `POST /api/v1/hardware/analyze` - Analyze hardware specifications
+- `POST /api/v1/matcher/best` - Find best hardware for a model
 - `GET /api/v1/hardware/` - List available hardware devices
-- `POST /api/v1/hardware/crawl` - Trigger hardware catalog crawl
-
-See full API documentation at: `http://localhost:8000/docs`
+- `POST /api/v1/metadata/extract` - Interactive metadata extraction (requires OpenAI)
+- `POST /api/v1/hardware/crawl` - Trigger hardware catalog crawl (requires OpenAI)
 
 ## 📁 Project Structure
 
 ```
 ChooseYourHardware/
-├── src/
+├── src/                        # Source code
 │   ├── analyzers/              # Analysis engines
 │   │   ├── model/              # Model analyzers
 │   │   │   ├── classical/      # KNN, K-Means, Trees
 │   │   │   │   ├── kmeans.py
 │   │   │   │   ├── knn.py
 │   │   │   │   └── trees.py
-│   │   │   └── neural/         # CNNs, Transformers, LLMs
+│   │   │   └── neural/         # Neural networks, Transformers
 │   │   │       ├── layers.py
 │   │   │       ├── transformers.py
 │   │   │       └── llm.py
 │   │   └── hardware/           # Hardware analyzers
-│   │       ├── core.py         # Normalization & validation
-│   │       └── utils.py        # FLOPS calculation, inference
-│   ├── matchers/               # Latency estimation
-│   │   └── core.py             # Bottleneck analysis, filtering
+│   │       ├── core.py
+│   │       └── utils.py
+│   ├── matchers/               # Latency estimation & matching
+│   │   └── core.py
 │   ├── metadata_extractor/     # LLM-powered extraction
-│   │   ├── service.py          # Main extractor service
-│   │   ├── schemas.py          # Request/response models
-│   │   ├── prompts/            # LLM prompt templates
-│   │   └── services/           # Hardware crawler, storage
+│   │   ├── service.py
+│   │   ├── schemas.py
+│   │   ├── prompts/
+│   │   ├── routers/
+│   │   └── services/
 │   ├── api/                    # FastAPI application
-│   │   ├── main.py             # API entry point
-│   │   └── v1/endpoints/       # API endpoints
-│   │       ├── models.py
-│   │       ├── hardware.py
-│   │       ├── metadata.py
-│   │       └── matcher.py
-│   ├── cli/                    # Command-line interfaces
+│   │   ├── main.py
+│   │   └── v1/
+│   │       ├── endpoints/
+│   │       └── schemas/
+│   ├── cli/                    # Command-line tools
 │   │   ├── model_cli.py
 │   │   └── hardware_cli.py
 │   ├── config/                 # Configuration
-│   │   ├── settings.py         # Pydantic settings
-│   │   └── constants.py        # Scenario kinds, dtype mappings
-│   └── utils/                  # Utilities
+│   │   ├── settings.py
+│   │   └── constants.py
+│   └── utils/                  # Utility functions
 │       ├── logging.py
 │       ├── validators.py
 │       └── converters.py
 ├── Frontend/                   # Web interface
-│   └── northlane-partner-hub/  # React + Vite application
+│   └── northlane-partner-hub/  # React + TypeScript app
 │       ├── src/
-│       │   ├── pages/          # Chatbot, landing page
-│       │   └── components/     # UI components (shadcn)
+│       │   ├── pages/
+│       │   └── components/
 │       └── public/
-├── deployment/                 # Deployment automation
+├── deployment/                 # Cloud deployment scripts
 │   ├── deploy_all.sh           # Deploy backend + frontend
-│   ├── backend/                # Cloud Run deployment
-│   │   └── deploy_gcloud.sh
-│   └── frontend/               # Firebase Hosting deployment
-│       └── deploy_firebase.sh
-├── device_data/                # Hardware catalog (JSON)
+│   ├── backend/
+│   │   └── deploy_gcloud.sh    # Cloud Run deployment
+│   └── frontend/
+│       └── deploy_firebase.sh  # Firebase Hosting
+├── device_data/                # Hardware specifications (JSON)
 │   ├── nvidia_h100_sxm_80gb.json
 │   ├── amd_mi300x.json
-│   └── ...
-├── tests/                      # Test suite
+│   └── ... (13 device profiles)
 ├── Dockerfile                  # Production container
-├── pyproject.toml              # Package configuration
+├── pyproject.toml              # Package metadata
 ├── requirements.txt            # Python dependencies
+├── model_config.json           # Example model configuration
 └── README.md                   # This file
 ```
 
 
+## 🚢 Cloud Deployment
 
-## 🚢 Deployment
+This project is deployed on Google Cloud Platform using:
+- **Backend**: Google Cloud Run (containerized FastAPI application)
+- **Frontend**: Firebase Hosting (static React application)
 
-### Production Deployment (Automated)
+### Automated Deployment
 
-Deploy both backend and frontend to Google Cloud:
+Deploy both backend and frontend in one command:
 
 ```bash
 cd deployment
 ./deploy_all.sh
 ```
 
-See [deployment/README.md](deployment/README.md) for detailed instructions.
+This script will:
+1. Prompt for your GCP Project ID (if not in `.env`)
+2. Prompt for your OpenAI API Key (if not in `.env`)
+3. Deploy backend to Cloud Run
+4. Capture the backend URL automatically
+5. Deploy frontend to Firebase with correct backend URL
+6. Save configuration to `.env` for future deployments
+
+See [deployment/README.md](deployment/README.md) for detailed deployment instructions.
 
 ### Manual Deployment
 
-**Backend** (Google Cloud Run):
+**Backend to Cloud Run:**
 ```bash
 cd deployment/backend
 ./deploy_gcloud.sh
 ```
 
-**Frontend** (Firebase Hosting):
+**Frontend to Firebase:**
 ```bash
-cd deployment/frontend  
+cd deployment/frontend
 ./deploy_firebase.sh
 ```
 
 ### Docker
 
+The application can be containerized and run locally:
+
 ```bash
-# Build production image
+# Build Docker image
 docker build -t chooseyourhardware .
 
-# Run locally
+# Run container
 docker run -p 8080:8080 \
-  -e OPENAI_API_KEY=your-key \
+  -e OPENAI_API_KEY=your-key-here \
   -e PORT=8080 \
   chooseyourhardware
+
+# Access at http://localhost:8080
 ```
 
-## 📚 Documentation
-
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development guidelines and contribution workflow
-- **[deployment/README.md](deployment/README.md)** - Deployment guide (Cloud Run + Firebase)
-- **API Documentation** - Available at `/docs` when running the API server
+The Dockerfile uses Python 3.11-slim and includes health checks for production readiness.
 
 ## 🧪 Technical Details
 
 ### Model Analysis Methodology
 
-**Classical ML**:
-- KNN: Distance computations (`O(n × d × k)`) + sorting
-- K-Means: Centroid distance + assignment iterations  
-- Decision Trees: Tree traversal + feature comparisons
-- Ensembles: Per-tree cost × number of trees
+**Classical ML:**
+- **KNN**: Distance computations (`O(n × d × k)`) + sorting operations
+- **K-Means**: Centroid distance calculations + assignment iterations  
+- **Decision Trees**: Tree traversal cost + feature comparison operations
+- **Ensembles**: Per-tree cost × number of trees (Random Forest, Gradient Boosted Trees)
 
-**Neural Networks**:
-- Layer-wise analysis: Parameters, FLOPs, activations per layer
-- Memory tracking: Peak activation bytes, parameter memory
-- Arithmetic intensity: FLOPs / memory bytes (compute vs bandwidth bound)
+**Neural Networks:**
+- Layer-wise analysis: Parameters, FLOPs, and activations per layer
+- Memory tracking: Peak activation memory, parameter memory
+- Arithmetic intensity: FLOPs / memory bytes accessed
 
-**Transformers/LLMs**:
-- Attention: `O(seq_len² × d_model)` complexity
-- Feed-forward: `O(seq_len × d_model × d_ff)`
-- KV cache: Memory for cached keys/values during autoregressive generation
-- Separate prefill and per-token decode costs
+**Transformers:**
+- **Attention**: `O(seq_len² × d_model)` complexity for self-attention
+- **Feed-forward**: `O(seq_len × d_model × d_ff)` for linear layers
+- Multi-head attention computation accounting
+- Layer normalization overhead
 
 ### Hardware Analysis Features
 
-- **Normalization**: Convert various spec formats to unified schema
-- **Inference**: Derive missing fields (e.g., FP32 FLOPS from SM count + clock)
-- **Multi-precision**: Track FP32, FP16, BF16, INT8 capabilities separately
-- **Memory modeling**: Separate VRAM (GPU) vs RAM (CPU/shared) bandwidth and capacity
-- **Latency characteristics**: DRAM latency, cache latency for memory-bound analysis
+- **Normalization**: Convert various device specification formats to unified schema
+- **Inference**: Derive missing fields from available specifications
+- **Multi-precision Support**: Track FP32, FP16, BF16, INT8 capabilities
+- **Memory Modeling**: Separate VRAM (GPU) vs RAM (CPU/shared) modeling
+- **Latency Characteristics**: DRAM latency and cache latency parameters
 
 ### Matching Strategy
 
-1. **Dtype selection**: Choose precision based on model requirements and hardware support
-2. **Memory feasibility**: Check if working set (params + activations + KV cache) fits in device memory
-3. **Bottleneck identification**:
-   - **Compute-bound**: Latency = FLOPs / throughput
-   - **Memory bandwidth-bound**: Latency = memory streamed / bandwidth
-   - **Memory latency-bound**: Add overhead for cache/DRAM accesses
-4. **Constraint filtering**: Eliminate devices exceeding budget, power, or incompatible with XLA
-5. **Ranking**: Select device with lowest estimated latency
+The matching algorithm follows these steps:
 
-**Note**: Latency estimates are analytical predictions. Real-world validation against measured performance is recommended for production use.
+1. **Dtype Selection**: Choose precision based on model requirements and hardware support
+2. **Memory Feasibility**: Verify working set (parameters + activations) fits in device memory
+3. **Bottleneck Identification**:
+   - **Compute-bound**: Latency ≈ FLOPs / compute_throughput
+   - **Memory-bound**: Latency ≈ memory_bytes / memory_bandwidth
+4. **Constraint Filtering**: Eliminate devices exceeding budget, power, or compatibility requirements
+5. **Ranking**: Select device with lowest estimated latency among feasible options
+
+**⚠️ Important**: Latency estimates are analytical predictions based on roofline models and theoretical analysis. They have **not been validated** against real hardware measurements. For production use, validate predictions against actual hardware performance.
+
+##  Hardware Catalog
+
+The system includes **13 hardware device profiles** covering modern AI accelerators:
+
+- **NVIDIA GPUs**: H100 SXM 80GB, A100 PCIe 40GB, L4, RTX 5090, RTX 5080  
+- **NVIDIA Jetson SoCs**: AGX Orin, AGX Orin Nano, AGX Orin NX  
+- **AMD GPUs**: MI300X, Radeon RX 9090 XT, RX 9070 XT  
+- **Google TPUs**: TPU v5e  
+- **Intel Accelerators**: Gaudi3  
+
+Device specifications are stored as JSON files in `device_data/` and include:
+- Compute performance (FLOPS for FP32, FP16, BF16, INT8)
+- Memory capacity and bandwidth
+- Power consumption
+- Pricing information (where available)
+- Latency characteristics (DRAM, cache)
+
+## 📚 Documentation
+
+- **[deployment/README.md](deployment/README.md)** - Complete deployment guide for Cloud Run and Firebase
+- **API Documentation** - Interactive Swagger UI at `/docs` endpoint
+- **Example Configurations** - See `model_config.json` for model specification examples
+
+## 🎓 Academic Context
+
+This project was developed as part of **EECE 490** at the American University of Beirut (AUB).
+
+**Project Objectives:**
+- Analytical modeling of ML workload characteristics
+- Hardware selection algorithms for edge and cloud deployment
+- Cloud infrastructure deployment (Google Cloud Run + Firebase)
+- Integration of LLMs for metadata extraction
+
+**Key Learning Outcomes:**
+- FastAPI backend development and REST API design
+- React frontend with TypeScript and modern UI libraries
+- Docker containerization and cloud deployment
+- Analytical performance modeling and roofline analysis
+- LLM integration for structured data extraction
+
+**Limitations & Future Work:**
+- Latency predictions are theoretical and require validation against real hardware
+- Limited hardware catalog (13 devices, can be expanded)
+- No automated testing or CI/CD pipeline
+- Metadata extraction accuracy not quantitatively evaluated
+
+## 🔮 Future Enhancements
+
+### High Priority
+
+**1. Validation & Testing** ⚠️
+- Compare predicted vs actual latency on real hardware
+- Implement comprehensive test suite (unit, integration, end-to-end)
+- Add CI/CD pipeline with automated testing
+- Track test coverage with pytest-cov
+
+**2. Dependency Management**
+- Pin exact versions in `requirements.txt` (currently uses `>=` ranges)
+- Regular security audits
+- Consider Poetry for better dependency resolution
+
+### Feature Enhancements
+
+**3. Model Support**
+- Additional architectures: RNNs, GANs, diffusion models
+- Direct framework integration (PyTorch, TensorFlow model loading)
+- Advanced quantization: 4-bit, 2-bit schemes
+- Sparsity accounting in FLOPs calculations
+
+**4. Hardware Catalog Expansion**
+- Cloud instances: AWS EC2, Azure VMs, GCP Compute Engine
+- More edge devices: Qualcomm, MediaTek accelerators
+- Server CPUs: Intel Xeon, AMD EPYC
+- Real-time pricing from cloud provider APIs
+
+**5. Advanced Matching**
+- Multi-objective optimization (Pareto front analysis)
+- Workload profiling with throughput requirements
+- Dynamic/spot instance pricing consideration
+- Environmental impact (CO2 emissions) calculations
+
+**6. Production Readiness**
+- Result caching (Redis)
+- API authentication and rate limiting
+- Monitoring: Prometheus metrics, Grafana dashboards
+- Error tracking with Sentry
+- Structured logging and distributed tracing
+
+**7. User Experience**
+- Interactive performance/cost comparison charts
+- Batch model analysis
+- Report export (PDF, CSV)
+- Model repository for saving configurations
+
+## 🔗 Links
+
+- **GitHub Repository**: https://github.com/Salman-719/ChooseYourHardware
+- **Live Frontend**: https://easyware.web.app
+- **Live API**: https://chooseyourhardware-rhen2vww6a-uc.a.run.app
+- **API Documentation**: https://chooseyourhardware-rhen2vww6a-uc.a.run.app/docs
 
 ## 📄 License
 
 MIT License
 
-## 🔗 Links
-
-- **Repository**: https://github.com/Salman-719/ChooseYourHardware
-- **Live Demo**: https://easyware.web.app
-- **API**: https://chooseyourhardware-rhen2vww6a-uc.a.run.app
-- **API Docs**: https://chooseyourhardware-rhen2vww6a-uc.a.run.app/docs
-
 ---
 
-## 📊 Hardware Catalog
-
-The system includes **13 device profiles** covering modern AI accelerators:
-
-**NVIDIA GPUs**: H100 SXM 80GB, A100 PCIe 40GB, L4, RTX 5090, RTX 5080  
-**NVIDIA Jetson**: AGX Orin, AGX Orin Nano, AGX Orin NX  
-**AMD GPUs**: MI300X, Radeon RX 9090 XT, RX 9070 XT  
-**Google TPUs**: TPU v5e  
-**Intel Accelerators**: Gaudi3  
-
-All device specs are stored as JSON in `device_data/` and include: FLOPS (FP32/FP16/BF16/INT8), memory capacity/bandwidth, power consumption, pricing, and latency characteristics.
-
-
-## Future Improvements
-
-### Recommended Enhancements
-
-1. **Validation & Testing** ⚠️ **Critical Priority**
-   - Add quantitative validation: Compare predicted vs measured latency across real devices
-   - Implement automated test suite with unit tests for analyzers, matchers, and API endpoints
-   - Add integration tests for end-to-end pipeline flows
-   - Create test fixtures with known model-hardware pairs and expected results
-
-2. **LLM Metadata Extraction**
-   - Track extraction precision/recall metrics (what percentage of fields extracted correctly)
-   - Implement error analysis: categorize extraction failures by model type
-   - Add validation step: verify extracted metadata produces valid analyzer output
-   - Support more model architectures (RNNs, GANs, diffusion models)
-
-3. **Observability & Monitoring**
-   - Add structured logging for production debugging
-   - Implement metrics collection (request latency, error rates, cache hit rates)
-   - Set up distributed tracing for multi-service requests
-   - Create dashboards for system health and performance
-
-4. **Hardware Catalog**
-   - Expand device coverage (more CPUs, mobile chips, custom ASICs)
-   - Add historical pricing data for cost-trend analysis
-   - Implement automatic catalog updates via scheduled crawler
-   - Support multi-cloud providers (AWS instances, Azure VMs, GCP machine types)
-
-5. **User Experience**
-   - Add visualization: Charts comparing devices on latency/cost/power dimensions
-   - Show bottleneck breakdowns graphically (what % is compute vs memory vs latency)
-   - Support batch analysis: Compare multiple models across hardware catalog
-   - Add export functionality: Generate reports (PDF/CSV) with recommendations
-
-6. **Documentation**
-   - Populate examples/ directory with sample model configurations
-   - Create quickstart tutorial with step-by-step example
-   - Document API authentication and rate limiting (if added)
-   - Add CHANGELOG.md for version tracking
-
-7. **Performance**
-   - Cache analyzer results for identical model configurations
-   - Optimize hardware crawler: Parallel fetching, smart rate limiting
-   - Add batch processing endpoint for multiple models
-   - Implement result pagination for large device catalogs
-
-8. **Deployment & Operations**
-   - Pin dependency versions in `requirements.txt` for reproducibility (`==` instead of `>=`)
-   - Add health checks with detailed component status (database, OpenAI API, cache)
-   - Implement graceful degradation (work without OpenAI API if metadata extraction not needed)
-   - Set up CI/CD pipeline for automated testing and deployment
-   - Add staging environment for pre-production testing
-   - Implement structured logging and distributed tracing
-
-9. **Code Quality**
-   - Remove debug print statements from production code
-   - Add comprehensive inline documentation for complex algorithms
-   - Create architecture decision records (ADRs)
-
----
-
-## 🎓 Academic Context
-
-This project was developed as part of EECE 490 at the American University of Beirut (AUB), demonstrating:
-- Analytical modeling of ML workloads
-- Intelligent hardware selection algorithms
-- Production deployment on cloud infrastructure
-- Integration of LLMs for metadata extraction
-
-**Key Innovations**:
-- Scenario-aware latency estimation (prefill/decode, batch, streaming)
-- Multi-precision bottleneck analysis (compute/memory/latency-bound)
-- Conversational interface for non-technical users
-- Automated hardware catalog updates via LLM-powered crawling
-
-These improvements would elevate the project from a strong MVP to a production-grade, enterprise-ready system.
+**⚠️ Disclaimer**: This is an academic research project developed for EECE 490 at AUB. Latency predictions are analytical estimates and have not been validated against real hardware. Always validate recommendations with actual performance testing before production deployment.

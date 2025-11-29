@@ -7,3 +7,4 @@ __pycache__/
 .DS_Store
 Frontend/northlane-partner-hub/node_modules
 Frontend/northlane-partner-hub/.env.local
+logs/
