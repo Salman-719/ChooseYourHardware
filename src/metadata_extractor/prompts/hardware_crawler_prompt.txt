@@ -39,6 +39,27 @@ Spec requirements:
 
 Return ONLY valid JSON (no markdown, no triple backticks, no extra text). Use the above keys exactly. Return at most 20 items.
 
+Example output object (shape and keys):
+{
+  "hardware_id": "intel-gaudi3-accelerator",
+  "kind": "accelerator",
+  "vendor": "Intel",
+  "model_name": "Gaudi3",
+  "spec": {
+    "memory_capacity_gb": 128,
+    "memory_bandwidth_gbps": 2500.0,
+    "peak_fp16_tflops": 100.0,
+    "peak_int8_tops": 200.0,
+    "power_consumption_w": 600,
+    "dram_latency_ns": 200.0,
+    "cache_latency_ns": 10.0
+  },
+  "url": "https://habana.ai/",
+  "price": "on-request",
+  "source": "https://habana.ai/",
+  "discovered_at": "2025-11-27 04:44:22"
+}
+
 HTML:
 ```
 {html}

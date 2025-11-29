@@ -33,6 +33,18 @@ def _hardware_path(record: HardwareRecord) -> Path:
     return DEVICE_DATA_DIR / filename
 
 
+def _with_latency_defaults(spec: dict) -> dict:
+    """
+    Ensure latency fields have defaults when missing.
+    """
+    updated = dict(spec) if spec is not None else {}
+    if updated.get("dram_latency_ns") is None and updated.get("dram_latency_s") is None:
+        updated["dram_latency_ns"] = 200.0
+    if updated.get("cache_latency_ns") is None and updated.get("cache_latency_s") is None:
+        updated["cache_latency_ns"] = 10.0
+    return updated
+
+
 def upsert_hardware(items: Iterable[HardwareItem]) -> int:
     """
     Write hardware records to device_data as JSON files.
@@ -43,12 +55,13 @@ def upsert_hardware(items: Iterable[HardwareItem]) -> int:
         record = HardwareRecord.model_validate(item)
         path = _hardware_path(record)
         was_new = not path.exists()
+        spec_with_defaults = _with_latency_defaults(record.spec)
         payload = {
             "hardware_id": record.hardware_id,
             "kind": record.kind,
             "vendor": record.vendor,
             "model_name": record.model_name,
-            "spec": record.spec,
+            "spec": spec_with_defaults,
             "url": record.url,
             "price": record.price,
             "source": record.source,

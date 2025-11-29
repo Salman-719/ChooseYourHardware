@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 
 import httpx
 from openai import OpenAI
+from dotenv import load_dotenv
 
 from config.settings import get_settings
 from metadata_extractor.services.hardware_models import HardwareRecord
@@ -15,12 +16,15 @@ from metadata_extractor.services.hardware_store import upsert_hardware
 
 logger = logging.getLogger(__name__)
 
+# Load .env so os.getenv picks up crawler settings when run locally
+load_dotenv(override=False)
+
 settings = get_settings()
 
 OPENAI_API_KEY = settings.openai_api_key
 OPENAI_LLM_MODEL = settings.openai_model
 HARDWARE_LLM_MODEL = os.getenv("HARDWARE_LLM_MODEL")
-HARDWARE_FEED_URL = os.getenv("HARDWARE_FEED_URL", "https://example.com")
+HARDWARE_FEED_URL = os.getenv("HARDWARE_FEED_URL", "https://www.techpowerup.com/gpu-specs/")
 HARDWARE_FEED_FILE = os.getenv("HARDWARE_FEED_FILE")
 HARDWARE_CRAWL_INTERVAL_SECONDS = int(os.getenv("HARDWARE_CRAWL_INTERVAL_SECONDS", "3600"))
 HARDWARE_MAX_ITEMS = int(os.getenv("HARDWARE_MAX_ITEMS", "20"))
@@ -265,7 +269,7 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
     """
     # Include more of the combined feed+detail HTML to give the LLM full context.
     sanitized = _sanitize_html(feed_html)
-    html_slice = sanitized[:300000]
+    html_slice = sanitized[:600000]
     prompt = HARDWARE_CRAWLER_PROMPT.format(
         source_url=source_url,
         html=html_slice,
