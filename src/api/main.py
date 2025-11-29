@@ -85,7 +85,7 @@ if __name__ == "__main__":
     
     settings = get_settings()
     uvicorn.run(
-        "choose_your_hardware.api.main:app",
+        "api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.environment == "development",

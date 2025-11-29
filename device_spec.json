@@ -1,0 +1,44 @@
+{
+  "hardware_list": [
+    {
+      "hardware_id": "nvidia-jetson-agx-orin-nano",
+      "kind": "jetson",
+      "vendor": "NVIDIA",
+      "model_name": "Jetson AGX Orin Nano",
+      "spec": {
+        "ram_capacity_gb": 16,
+        "ram_bandwidth_gbps": 68.0,
+        "cpu": {
+          "num_sockets": 1,
+          "cores_per_socket": 6,
+          "threads_per_core": 1,
+          "base_clock_ghz": 1.5,
+          "vector_width_bits": 128,
+          "fma_units_per_core": 2,
+          "ram_capacity_gb": 16,
+          "ram_bandwidth_gbps": 68.0,
+          "dram_latency_ns": 140.0,
+          "cache_latency_ns": 7.0
+        },
+        "gpu": {
+          "peak_fp32_tflops": 1.4,
+          "peak_fp16_tflops": 2.8,
+          "peak_int8_tops": 5.6,
+          "vram_capacity_gb": 0.001,
+          "vram_bandwidth_gbps": 68.0,
+          "supports_fp16": true,
+          "supports_bf16": false,
+          "supports_int8": true,
+          "nvlink_bandwidth_gbps": null,
+          "pcie_bandwidth_gbps": null,
+          "dram_latency_ns": 140.0,
+          "cache_latency_ns": 7.0
+        }
+      },
+      "url": "https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-agx-orin/",
+      "price": "999 USD",
+      "source": "https://www.nvidia.com/",
+      "discovered_at": "2025-11-27 04:44:22"
+    }
+  ]
+}

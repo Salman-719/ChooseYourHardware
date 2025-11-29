@@ -1,0 +1,273 @@
+{
+  "usage_constraints": {
+    "batch_size": 8,
+    "target_latency_s": 100,
+    "max_cost_usd": 100000,
+    "max_power_w": 50
+  },
+  "model_level": {
+    "input_shape": [
+      3,
+      224,
+      224
+    ],
+    "precision": "fp32",
+    "total_params": 25557032,
+    "trainable_params": 10000000,
+    "non_trainable_params": 0,
+    "framework": "pytorch",
+    "model_type": "cnn",
+    "is_XLA": true
+  },
+  "layer_summary": [
+    {
+      "name": "conv1",
+      "type": "Conv2D",
+      "output_shape": [
+        null,
+        64,
+        112,
+        112
+      ],
+      "params": 9408
+    },
+    {
+      "name": "bn1",
+      "type": "BatchNormalization",
+      "output_shape": [
+        null,
+        64,
+        112,
+        112
+      ],
+      "params": 128
+    },
+    {
+      "name": "relu",
+      "type": "ReLU",
+      "output_shape": [
+        null,
+        64,
+        112,
+        112
+      ],
+      "params": 0
+    },
+    {
+      "name": "maxpool",
+      "type": "MaxPool2D",
+      "output_shape": [
+        null,
+        64,
+        56,
+        56
+      ],
+      "params": 0
+    },
+    {
+      "name": "layer1_block1",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        256,
+        56,
+        56
+      ],
+      "params": 75008
+    },
+    {
+      "name": "layer1_block2",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        256,
+        56,
+        56
+      ],
+      "params": 70400
+    },
+    {
+      "name": "layer1_block3",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        256,
+        56,
+        56
+      ],
+      "params": 70400
+    },
+    {
+      "name": "layer2_block1",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        512,
+        28,
+        28
+      ],
+      "params": 379392
+    },
+    {
+      "name": "layer2_block2",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        512,
+        28,
+        28
+      ],
+      "params": 280064
+    },
+    {
+      "name": "layer2_block3",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        512,
+        28,
+        28
+      ],
+      "params": 280064
+    },
+    {
+      "name": "layer2_block4",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        512,
+        28,
+        28
+      ],
+      "params": 280064
+    },
+    {
+      "name": "layer3_block1",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        1024,
+        14,
+        14
+      ],
+      "params": 1512448
+    },
+    {
+      "name": "layer3_block2",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        1024,
+        14,
+        14
+      ],
+      "params": 1117184
+    },
+    {
+      "name": "layer3_block3",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        1024,
+        14,
+        14
+      ],
+      "params": 1117184
+    },
+    {
+      "name": "layer3_block4",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        1024,
+        14,
+        14
+      ],
+      "params": 1117184
+    },
+    {
+      "name": "layer3_block5",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        1024,
+        14,
+        14
+      ],
+      "params": 1117184
+    },
+    {
+      "name": "layer3_block6",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        1024,
+        14,
+        14
+      ],
+      "params": 1117184
+    },
+    {
+      "name": "layer4_block1",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        2048,
+        7,
+        7
+      ],
+      "params": 6039552
+    },
+    {
+      "name": "layer4_block2",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        2048,
+        7,
+        7
+      ],
+      "params": 4462592
+    },
+    {
+      "name": "layer4_block3",
+      "type": "Layer",
+      "output_shape": [
+        null,
+        2048,
+        7,
+        7
+      ],
+      "params": 4462592
+    },
+    {
+      "name": "avgpool",
+      "type": "AvgPool2D",
+      "output_shape": [
+        null,
+        2048,
+        1,
+        1
+      ],
+      "params": 0
+    },
+    {
+      "name": "flatten",
+      "type": "Flatten",
+      "output_shape": [
+        null,
+        2048
+      ],
+      "params": 0
+    },
+    {
+      "name": "fc",
+      "type": "Dense",
+      "output_shape": [
+        null,
+        1000
+      ],
+      "params": 2049000
+    }
+  ]
+}
