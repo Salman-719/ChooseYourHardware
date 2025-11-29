@@ -7,19 +7,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  HardwareItem,
+  HardwareSelection,
+  applySelectionToInventory,
+  hasActiveSelection,
+  loadHardwareSelection,
+} from '@/lib/hardwareSelection';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
-type HardwareItem = {
-  hardware_id: string;
-  kind: string;
-  vendor: string;
-  model_name: string;
-  spec: Record<string, unknown>;
-  url?: string | null;
-  price?: string | null;
-  source?: string | null;
-};
+const clampSelection = (selection: HardwareSelection): HardwareSelection => ({
+  ...selection,
+  selectedIds: (selection.selectedIds || []).slice(0, 10),
+});
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 const METADATA_ENDPOINT = `${API_BASE_URL}/metadata/extract`;
@@ -135,6 +136,7 @@ const getAssistantResponse = async (
   recommendation: HardwareItem | null,
   sessionId: string,
   lastQuestion: string | null,
+  hardwareFilter: number | string[],
 ): Promise<{ reply: string; nextQuestion: string | null; metadata?: Record<string, unknown> }> => {
   const payload = {
     model_type: 'cnn',
@@ -143,6 +145,7 @@ const getAssistantResponse = async (
     last_question: lastQuestion,
     current_state: null,
     reset: false,
+    hardware_filter: hardwareFilter,
   };
 
   // Debug: log outbound payload
@@ -195,6 +198,12 @@ const Chatbot = () => {
   const [modelMetadata, setModelMetadata] = useState<Record<string, unknown> | null>(null);
   const [matcherResult, setMatcherResult] = useState<string | null>(null);
   const [matcherLoading, setMatcherLoading] = useState(false);
+  const [hardwareSelection, setHardwareSelection] = useState<HardwareSelection>(() =>
+    clampSelection(loadHardwareSelection()),
+  );
+  const hardwareFilterPayload = hasActiveSelection(hardwareSelection)
+    ? clampSelection(hardwareSelection).selectedIds
+    : -1;
 
   useEffect(() => {
     setMessages([
@@ -213,6 +222,10 @@ const Chatbot = () => {
     }
   }, [location.state]);
 
+  useEffect(() => {
+    setHardwareSelection(clampSelection(loadHardwareSelection()));
+  }, [location.key]);
+
   const preferencesSummary = useMemo(() => {
     const budgetText = budget ? `$${budget}` : 'not specified';
     const powerText = powerLimit ? `${powerLimit}W max` : 'not specified';
@@ -220,24 +233,47 @@ const Chatbot = () => {
     return `Budget: ${budgetText}, Power: ${powerText}, Mobility: ${mobilityText}`;
   }, [budget, powerLimit, isEdgeDevice]);
 
+  const selectionSummary = useMemo(() => {
+    if (hasActiveSelection(hardwareSelection)) {
+      const customNote = hardwareSelection.customHardware.length
+        ? ` (${hardwareSelection.customHardware.length} custom)`
+        : '';
+      return `Hardware filter on: ${hardwareSelection.selectedIds.length} selected${customNote}`;
+    }
+    if (hardwareSelection.customHardware.length) {
+      const count = hardwareSelection.customHardware.length;
+      return `${count} custom device${count === 1 ? '' : 's'} available (not filtered yet)`;
+    }
+    return 'No hardware filter applied';
+  }, [hardwareSelection]);
+
   const handleFindGpu = async () => {
-    const budgetValue = parseFloat(budget);
-    const powerValue = parseFloat(powerLimit);
+    const budgetValueRaw = parseFloat(budget);
+    const powerValueRaw = parseFloat(powerLimit);
+    const budgetValue = Number.isFinite(budgetValueRaw) ? Math.max(0, budgetValueRaw) : budgetValueRaw;
+    const powerValue = Number.isFinite(powerValueRaw) ? Math.max(0, powerValueRaw) : powerValueRaw;
 
     if (finding) return;
+
+    const currentSelection = clampSelection(loadHardwareSelection());
+    setHardwareSelection(currentSelection);
+    const filterNote = hasActiveSelection(currentSelection)
+      ? ` Applying your hardware filter (${currentSelection.selectedIds.length} selected).`
+      : '';
 
     setMessages((prev) => [
       ...prev,
       { role: 'user', content: preferencesSummary },
-      { role: 'assistant', content: 'Checking the GPU inventory against your constraints...' },
+      { role: 'assistant', content: `Checking the GPU inventory against your constraints...${filterNote}` },
     ]);
 
     setFinding(true);
 
     try {
       const hardwareItems = await fetchGpuInventory();
+      const scopedInventory = applySelectionToInventory(hardwareItems, currentSelection);
       const filtered = filterGpusForPreferences(
-        hardwareItems,
+        scopedInventory,
         Number.isFinite(budgetValue) ? budgetValue : undefined,
         Number.isFinite(powerValue) ? powerValue : undefined,
         isEdgeDevice,
@@ -247,7 +283,12 @@ const Chatbot = () => {
         setRecommendation(null);
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: 'No GPUs matched those filters. Try relaxing the budget or power limits.' },
+          {
+            role: 'assistant',
+            content: hasActiveSelection(currentSelection)
+              ? 'No GPUs matched those filters within your selection. Try relaxing the budget/power limits or adjust your hardware filter.'
+              : 'No GPUs matched those filters. Try relaxing the budget or power limits.',
+          },
         ]);
         return;
       }
@@ -259,7 +300,9 @@ const Chatbot = () => {
         ...prev,
         {
           role: 'assistant',
-          content: `I found ${filtered.length} GPUs that fit. The current best pick is:\n${formatGpuSummary(chosen)}`,
+          content: `I found ${filtered.length} GPUs that fit${
+            hasActiveSelection(currentSelection) ? ' inside your selection' : ''
+          }. The current best pick is:\n${formatGpuSummary(chosen)}`,
         },
       ]);
     } catch (error) {
@@ -292,6 +335,7 @@ const Chatbot = () => {
         recommendation,
         sessionIdRef.current,
         lastQuestionRef.current,
+        hardwareFilterPayload,
       );
       lastQuestionRef.current = assistantMessage.nextQuestion;
       if (assistantMessage.metadata) {
@@ -307,6 +351,7 @@ const Chatbot = () => {
             body: JSON.stringify({
               model: assistantMessage.metadata,
               device_dir: DEVICE_DIR,
+              hardware_filter: hardwareFilterPayload,
             }),
           });
           if (!matchResponse.ok) {
@@ -364,6 +409,7 @@ const Chatbot = () => {
                   id="budget"
                   type="number"
                   inputMode="decimal"
+                  min={0}
                   placeholder="e.g. 1200"
                   value={budget}
                   onChange={(e) => setBudget(e.target.value)}
@@ -375,6 +421,7 @@ const Chatbot = () => {
                   id="power"
                   type="number"
                   inputMode="decimal"
+                  min={0}
                   placeholder="e.g. 200"
                   value={powerLimit}
                   onChange={(e) => setPowerLimit(e.target.value)}
@@ -395,17 +442,27 @@ const Chatbot = () => {
                 {recommendation
                   ? `Current pick: ${recommendation.vendor} ${recommendation.model_name}`
                   : 'Set your constraints and I will filter GPUs from the backend dataset.'}
+                <div className="text-xs text-muted-foreground mt-1">{selectionSummary}</div>
               </div>
-              <Button onClick={handleFindGpu} disabled={finding} className="md:w-auto w-full">
-                {finding ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  'Find the best GPU'
-                )}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 md:w-auto w-full">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/hardware-filter')}
+                  className="w-full sm:w-auto"
+                >
+                  Manage filter
+                </Button>
+                <Button onClick={handleFindGpu} disabled={finding} className="w-full sm:w-auto">
+                  {finding ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    'Find the best GPU'
+                  )}
+                </Button>
+              </div>
             </div>
           </Card>
 

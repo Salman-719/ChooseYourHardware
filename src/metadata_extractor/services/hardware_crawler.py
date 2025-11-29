@@ -252,8 +252,8 @@ async def _extract_items_from_feed(feed_html: str, source_url: str) -> List[Hard
 
 async def crawl_once() -> int:
     """
-    Fetch the trusted feed, ask the agent to extract items, and upsert into the DB.
-    Returns the count of newly inserted rows.
+    Fetch the trusted feed, ask the agent to extract items, and write them into device_data.
+    Returns the count of newly created files.
     """
     try:
         html = await _fetch_feed()
@@ -269,9 +269,9 @@ async def crawl_once() -> int:
                 continue
         combined_html = html + "\n\n" + detail_html
         items = await _extract_items_from_feed(combined_html, HARDWARE_FEED_URL)
-        inserted = upsert_hardware(items)
-        logger.info("Hardware crawl finished: %s items parsed, %s inserted", len(items), inserted)
-        return inserted
+        written = upsert_hardware(items)
+        logger.info("Hardware crawl finished: %s items parsed, %s written to device_data", len(items), written)
+        return written
     except Exception as exc:
         logger.exception("Hardware crawl failed: %s", exc)
         return 0
