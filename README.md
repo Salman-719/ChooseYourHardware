@@ -211,7 +211,7 @@ echo '{"model_type": "knn", ...}' | analyze-model
 ```
 
 **Example Model Configurations:**
-- See `model_config.json` and `model_config1.json` in the project root for examples
+- See `model_config.json` in the project root for examples
 - Hardware device specs are in `device_data/` directory
 
 ### REST API (Local Development)
