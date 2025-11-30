@@ -32,9 +32,5 @@ USER appuser
 # Expose port (Cloud Run uses $PORT, defaults to 8080)
 EXPOSE 8080
 
-# Health check - uses $PORT environment variable
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests, os; requests.get(f'http://localhost:{os.getenv(\"PORT\", \"8080\")}/health')" || exit 1
-
 # Run the application - Cloud Run injects PORT env var
 CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}

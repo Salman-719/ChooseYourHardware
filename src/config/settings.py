@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: Optional[str] = Field(None, alias="OPENAI_API_KEY")
     openai_model: str = Field("gpt-4.1-2025-04-14", alias="OPENAI_LLM_MODEL")
+    # Hardware Defaults
+    default_utilization_fp32: float = 0.5
+    default_utilization_fp16: float = 0.5
+    default_utilization_bf16: float = 0.5
+    default_utilization_int8: float = 0.5
 
     # Logging
     log_level: str = "INFO"
