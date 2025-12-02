@@ -6,14 +6,11 @@
 
 ChooseYourHardware is a system that helps ML engineers and researchers select the fitting hardware for deploying machine learning models. It combines analytical modeling of ML workloads with intelligent hardware matching to provide latency estimates, bottleneck analysis, and cost-effective recommendations.
 
-**Status**: v1.0.0 - Research prototype with cloud deployment capabilities. Latency estimates are analytical predictions based on theoretical models and have not been validated against real hardware measurements.
 
 **Live Demo:**
 - Frontend: https://easyware.web.app
 - Backend API: https://chooseyourhardware-rhen2vww6a-uc.a.run.app
 - API Documentation: https://chooseyourhardware-rhen2vww6a-uc.a.run.app/docs
-
-**⚠️ Important Note**: This is an academic research project. Latency predictions are theoretical and should be validated against actual hardware before making production decisions.
 
 ### Key Capabilities
 
@@ -46,25 +43,25 @@ ChooseYourHardware is a system that helps ML engineers and researchers select th
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Frontend (React + TypeScript)                  │
-│           Interactive UI • Constraint Input • Results            │
+│                   Frontend (React + TypeScript)                 │
+│           Interactive UI • Constraint Input • Results           │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTPS/REST API
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   FastAPI Backend (Cloud Run)                    │
+│                   FastAPI Backend (Cloud Run)                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Model Analyzers         Hardware Analyzers      Matcher         │
+│  Model Analyzers         Hardware Analyzers      Matcher        │
 │  ├─ Classical ML         ├─ Normalization       ├─ Latency      │
 │  ├─ Neural Networks      ├─ FLOPS Calculation   ├─ Bottleneck   │
 │  └─ Transformers         └─ Memory Analysis     └─ Filtering    │
-│                                                                   │
-│  Metadata Extractor (Optional - requires OpenAI API key)         │
-│  ├─ LLM Conversation        Hardware Crawler                     │
+│                                                                 │
+│  Metadata Extractor                                             │
+│  ├─ LLM Conversation        Hardware Crawler                    │
 │  ├─ Field Templates         ├─ HTML Parsing                     │
 │  └─ Validation              └─ LLM Extraction                   │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ (Optional)
+                             │ 
                              ▼
                     ┌────────────────┐
                     │  OpenAI GPT    │
@@ -92,6 +89,7 @@ ChooseYourHardware is a system that helps ML engineers and researchers select th
    - Template-based validation for classical models
 
 4. **API Endpoints** (`src/api/v1/endpoints/`)
+   - `/health` - Health check
    - `/models/analyze` - Analyze ML model requirements
    - `/hardware/analyze` - Normalize hardware specifications  
    - `/metadata/extract` - Interactive metadata extraction (requires OpenAI)
@@ -106,6 +104,65 @@ ChooseYourHardware is a system that helps ML engineers and researchers select th
 6. **CLI Tools** (`src/cli/`)
    - `analyze-model` - Command-line model analysis
    - `analyze-hardware` - Command-line hardware analysis
+
+## 🧪 Technical Details
+
+### Model Analysis Methodology
+
+**Classical ML:**
+- **KNN**: Distance computations (`O(n × d × k)`) + sorting operations
+- **K-Means**: Centroid distance calculations + assignment iterations  
+- **Decision Trees**: Tree traversal cost + feature comparison operations
+- **Ensembles**: Per-tree cost × number of trees (Random Forest, Gradient Boosted Trees)
+
+**Neural Networks:**
+- Layer-wise analysis: Parameters, FLOPs, and activations per layer
+- Memory tracking: Peak activation memory, parameter memory
+- Arithmetic intensity: FLOPs / memory bytes accessed
+
+**Transformers:**
+- **Attention**: `O(seq_len² × d_model)` complexity for self-attention
+- **Feed-forward**: `O(seq_len × d_model × d_ff)` for linear layers
+- Multi-head attention computation accounting
+- Layer normalization overhead
+
+### Hardware Analysis Features
+
+- **Normalization**: Convert various device specification formats to unified schema
+- **Inference**: Derive missing fields from available specifications
+- **Multi-precision Support**: Track FP32, FP16, BF16, INT8 capabilities
+- **Memory Modeling**: Separate VRAM (GPU) vs RAM (CPU/shared) modeling
+- **Latency Characteristics**: DRAM latency and cache latency parameters
+
+### Matching Strategy
+
+The matching algorithm follows these steps:
+
+1. **Dtype Selection**: Choose precision based on model requirements and hardware support
+2. **Memory Feasibility**: Verify working set (parameters + activations) fits in device memory
+3. **Bottleneck Identification**:
+   - **Compute-bound**: Latency ≈ FLOPs / compute_throughput
+   - **Memory-bound**: Latency ≈ memory_bytes / memory_bandwidth
+4. **Constraint Filtering**: Eliminate devices exceeding budget, power, or compatibility requirements
+5. **Ranking**: Select device with lowest estimated latency among feasible options
+
+##  Hardware Catalog
+
+The system includes **13 hardware device profiles** covering modern AI accelerators:
+
+- **NVIDIA GPUs**: H100 SXM 80GB, A100 PCIe 40GB, L4, RTX 5090, RTX 5080  
+- **NVIDIA Jetson SoCs**: AGX Orin, AGX Orin Nano, AGX Orin NX  
+- **AMD GPUs**: MI300X, Radeon RX 9090 XT, RX 9070 XT  
+- **Google TPUs**: TPU v5e  
+- **Intel Accelerators**: Gaudi3  
+
+Device specifications are stored as JSON files in `device_data/` and include:
+- Compute performance (FLOPS for FP32, FP16, BF16, INT8)
+- Memory capacity and bandwidth
+- Power consumption
+- Pricing information (where available)
+- Latency characteristics (DRAM, cache)
+
 
 ## 🚀 Quick Start
 
@@ -157,7 +214,7 @@ See the [Installation](#installation) section below for setup instructions.
 
 - Python 3.9 or higher
 - Git
-- (Optional) OpenAI API key for metadata extraction features
+- OpenAI API key for metadata extraction features
 
 ### From Source
 
@@ -364,65 +421,6 @@ docker run -p 8080:8080 \
 
 The Dockerfile uses Python 3.11-slim and includes health checks for production readiness.
 
-## 🧪 Technical Details
-
-### Model Analysis Methodology
-
-**Classical ML:**
-- **KNN**: Distance computations (`O(n × d × k)`) + sorting operations
-- **K-Means**: Centroid distance calculations + assignment iterations  
-- **Decision Trees**: Tree traversal cost + feature comparison operations
-- **Ensembles**: Per-tree cost × number of trees (Random Forest, Gradient Boosted Trees)
-
-**Neural Networks:**
-- Layer-wise analysis: Parameters, FLOPs, and activations per layer
-- Memory tracking: Peak activation memory, parameter memory
-- Arithmetic intensity: FLOPs / memory bytes accessed
-
-**Transformers:**
-- **Attention**: `O(seq_len² × d_model)` complexity for self-attention
-- **Feed-forward**: `O(seq_len × d_model × d_ff)` for linear layers
-- Multi-head attention computation accounting
-- Layer normalization overhead
-
-### Hardware Analysis Features
-
-- **Normalization**: Convert various device specification formats to unified schema
-- **Inference**: Derive missing fields from available specifications
-- **Multi-precision Support**: Track FP32, FP16, BF16, INT8 capabilities
-- **Memory Modeling**: Separate VRAM (GPU) vs RAM (CPU/shared) modeling
-- **Latency Characteristics**: DRAM latency and cache latency parameters
-
-### Matching Strategy
-
-The matching algorithm follows these steps:
-
-1. **Dtype Selection**: Choose precision based on model requirements and hardware support
-2. **Memory Feasibility**: Verify working set (parameters + activations) fits in device memory
-3. **Bottleneck Identification**:
-   - **Compute-bound**: Latency ≈ FLOPs / compute_throughput
-   - **Memory-bound**: Latency ≈ memory_bytes / memory_bandwidth
-4. **Constraint Filtering**: Eliminate devices exceeding budget, power, or compatibility requirements
-5. **Ranking**: Select device with lowest estimated latency among feasible options
-
-**⚠️ Important**: Latency estimates are analytical predictions based on roofline models and theoretical analysis. They have **not been validated** against real hardware measurements. For production use, validate predictions against actual hardware performance.
-
-##  Hardware Catalog
-
-The system includes **13 hardware device profiles** covering modern AI accelerators:
-
-- **NVIDIA GPUs**: H100 SXM 80GB, A100 PCIe 40GB, L4, RTX 5090, RTX 5080  
-- **NVIDIA Jetson SoCs**: AGX Orin, AGX Orin Nano, AGX Orin NX  
-- **AMD GPUs**: MI300X, Radeon RX 9090 XT, RX 9070 XT  
-- **Google TPUs**: TPU v5e  
-- **Intel Accelerators**: Gaudi3  
-
-Device specifications are stored as JSON files in `device_data/` and include:
-- Compute performance (FLOPS for FP32, FP16, BF16, INT8)
-- Memory capacity and bandwidth
-- Power consumption
-- Pricing information (where available)
-- Latency characteristics (DRAM, cache)
 
 ## 📚 Documentation
 
@@ -455,24 +453,7 @@ This project was developed as part of **EECE 490** at the American University of
 
 ## 🔮 Future Enhancements
 
-### High Priority
-
-**1. Validation & Testing** ⚠️
-- Compare predicted vs actual latency on real hardware
-- Implement comprehensive test suite (unit, integration, end-to-end)
-- Add CI/CD pipeline with automated testing
-- Track test coverage with pytest-cov
-
-**2. Dependency Management**
-- Pin exact versions in `requirements.txt` (currently uses `>=` ranges)
-- Regular security audits
-- Consider Poetry for better dependency resolution
-
-### Feature Enhancements
-
 **3. Model Support**
-- Additional architectures: RNNs, GANs, diffusion models
-- Direct framework integration (PyTorch, TensorFlow model loading)
 - Advanced quantization: 4-bit, 2-bit schemes
 - Sparsity accounting in FLOPs calculations
 

@@ -134,7 +134,8 @@ DEPLOY_CMD="gcloud run deploy $SERVICE_NAME \
     --min-instances $MIN_INSTANCES \
     --max-instances $MAX_INSTANCES \
     --timeout ${TIMEOUT}s \
-    --port 8000 \
+    --port 8080 \
+    --cpu-boost \
     --clear-base-image \
     --set-env-vars PYTHONPATH=/app/src,ENV=production,OPENAI_API_KEY=$OPENAI_KEY"
 

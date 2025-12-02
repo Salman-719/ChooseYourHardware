@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
 from utils.logging import get_logger, setup_logging
 from metadata_extractor.routers.hardware_router import router as crawler_router
-from v1.endpoints import hardware, matcher, metadata, models
+from api.v1.endpoints import hardware, matcher, metadata, models
 
 logger = get_logger(__name__)
 
